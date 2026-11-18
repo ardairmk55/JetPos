@@ -1,0 +1,27 @@
+{% load static %}<!doctype html>
+<html lang="{{ user_lang }}" class="{% if user_theme == 'dark' %}dark{% endif %}{% if user_contrast %} hc{% endif %}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#252936">
+  <title>{% block title %}JETPOS{% endblock %}</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="{% static 'web/img/icon.svg' %}" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="{% static 'web/img/icon-192.png' %}">
+  <link rel="stylesheet" href="{% static 'web/app.css' %}">
+  <script>
+    document.documentElement.style.setProperty("--font-scale", ({{ user_font_scale|default:100 }}) / 100);
+    try {
+      if (!{{ user.is_authenticated|yesno:"true,false" }}) {
+        var t = localStorage.getItem("jet.theme");
+        if (t) document.documentElement.classList.toggle("dark", t === "dark");
+      }
+    } catch (e) {}
+  </script>
+</head>
+<body class="min-h-screen antialiased">
+  <a href="#main" class="sr-only-focusable btn btn-primary absolute left-2 top-2 z-50">İçeriğe geç</a>
+  {% block body %}{% endblock %}
+  {% block scripts %}{% endblock %}
+</body>
+</html>

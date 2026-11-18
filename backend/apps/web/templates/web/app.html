@@ -1,0 +1,48 @@
+{% extends "web/base.html" %}{% load static %}
+{% block body %}
+<div id="app" class="min-h-screen flex">
+  <aside id="sidebar" class="no-print hidden md:flex w-60 shrink-0 flex-col bg-ink text-white h-screen sticky top-0" aria-label="Ana menü">
+    <a href="/" class="px-5 py-5 text-2xl font-black tracking-tight" data-link>JET<span class="text-jet">POS</span></a>
+    <nav id="nav" class="flex-1 overflow-y-auto px-3 space-y-0.5 pb-4"></nav>
+    <div class="px-4 py-3 text-xs text-ink-300 border-t border-ink-600" id="side-foot"></div>
+  </aside>
+  <div class="flex-1 min-w-0 flex flex-col">
+    <header class="no-print sticky top-0 z-30 flex items-center gap-2 px-3 md:px-5 h-16 border-b bd" style="background:var(--surface)">
+      <button id="menu-btn" class="md:hidden btn btn-ghost btn-sm" aria-label="Menü">☰</button>
+      <div class="relative flex-1 max-w-xl">
+        <input id="gsearch" class="input" type="search" placeholder="Ara: masa, adisyon, ürün, müşteri…  ( / )" aria-label="Global arama" autocomplete="off">
+        <div id="gsearch-res" class="hidden absolute left-0 right-0 mt-1 card max-h-[70vh] overflow-y-auto z-40" role="listbox"></div>
+      </div>
+      <span id="net" class="badge hidden" role="status"></span>
+      <span id="queue-badge" class="badge hidden" style="background:var(--warn);color:#fff" role="status"></span>
+      <select id="branch-sel" class="input !w-auto hidden" aria-label="Şube"></select>
+      <button id="notif-btn" class="btn btn-ghost btn-sm relative" aria-label="Bildirimler">🔔<span id="notif-count" class="hidden absolute -top-1 -right-1 badge bg-jet text-ink">0</span></button>
+      <button id="theme-btn" class="btn btn-ghost btn-sm" aria-label="Tema değiştir">◐</button>
+      <button id="lang-btn" class="btn btn-ghost btn-sm" aria-label="Dil">TR</button>
+      <div class="relative">
+        <button id="user-btn" class="btn btn-ghost btn-sm" aria-haspopup="menu"><span id="user-name">…</span> ▾</button>
+        <div id="user-menu" class="hidden absolute right-0 mt-1 w-56 card p-1 z-40" role="menu"></div>
+      </div>
+    </header>
+    <main id="main" class="flex-1 p-3 md:p-5" tabindex="-1"></main>
+  </div>
+</div>
+<div id="drawer" class="hidden fixed inset-0 z-40 md:hidden" aria-hidden="true">
+  <div class="absolute inset-0 bg-black/50" data-close></div>
+  <div class="absolute left-0 top-0 bottom-0 w-64 bg-ink text-white p-3 overflow-y-auto" id="drawer-nav"></div>
+</div>
+<div id="notif-panel" class="hidden fixed right-2 top-16 w-[min(380px,95vw)] max-h-[75vh] overflow-y-auto card z-40 p-2" aria-live="polite"></div>
+<div id="toasts" class="fixed bottom-4 right-4 z-[60] space-y-2 w-[min(380px,92vw)]" aria-live="assertive"></div>
+<div id="modal-root"></div>
+<div id="lock" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-ink/95 p-4"></div>
+{% endblock %}
+{% block scripts %}
+<script>window.JET_VERSION = "{{ JETPOS_VERSION }}";</script>
+<script src="{% static 'web/js/core.js' %}"></script>
+<script src="{% static 'web/js/i18n_en.js' %}"></script>
+<script src="{% static 'web/js/ui.js' %}"></script>
+<script src="{% static 'web/js/pages_pos.js' %}"></script>
+<script src="{% static 'web/js/pages_mgmt.js' %}"></script>
+<script src="{% static 'web/js/pages_admin.js' %}"></script>
+<script src="{% static 'web/js/app.js' %}"></script>
+{% endblock %}

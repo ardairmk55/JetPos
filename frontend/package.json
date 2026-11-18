@@ -1,0 +1,16 @@
+{
+  "name": "jetpos-frontend",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "build": "tailwindcss -c tailwind.config.js -i src/input.css -o ../backend/apps/web/static/web/app.css --minify",
+    "watch": "tailwindcss -c tailwind.config.js -i src/input.css -o ../backend/apps/web/static/web/app.css --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  },
+  "private": true
+}

@@ -1,0 +1,66 @@
+{% extends "web/base.html" %}{% load static %}
+{% block title %}Giriş — JETPOS{% endblock %}
+{% block body %}
+<main id="main" class="min-h-screen grid lg:grid-cols-2">
+  <section class="hidden lg:flex flex-col justify-between p-12 bg-ink text-white">
+    <div class="text-3xl font-black tracking-tight">JET<span class="text-jet">POS</span></div>
+    <div>
+      <h1 class="text-4xl font-bold leading-tight">Hızlı Servis,<br>Akıllı Yönetim.</h1>
+      <p class="mt-4 text-ink-200 max-w-md">Masa, adisyon, mutfak, kasa, stok ve yönetim tek platformda. İnternet kesilse de yerel ağda çalışmaya devam eder.</p>
+    </div>
+    <p class="text-ink-300 text-sm">Sürüm {{ JETPOS_VERSION }}</p>
+  </section>
+  <section class="flex items-center justify-center p-6">
+    <div class="w-full max-w-sm">
+      <div class="lg:hidden text-3xl font-black mb-8">JET<span class="text-jet">POS</span></div>
+      <div id="pw-panel">
+        <h2 class="text-2xl font-bold mb-1" data-i18n="login.title">Giriş yap</h2>
+        <p class="muted text-sm mb-6" data-i18n="login.sub">Kullanıcı adınız ve şifrenizle oturum açın.</p>
+        <form id="login-form" class="space-y-4" autocomplete="on">
+          <div><label class="label" for="username" data-i18n="login.username">Kullanıcı adı</label>
+            <input id="username" name="username" class="input" autocomplete="username" required autofocus></div>
+          <div><label class="label" for="password" data-i18n="login.password">Şifre</label>
+            <input id="password" name="password" type="password" class="input" autocomplete="current-password" required></div>
+          <div id="otp-wrap" class="hidden"><label class="label" for="otp">Doğrulama kodu (2FA)</label>
+            <input id="otp" name="otp" class="input" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div>
+          <p id="err" class="text-sm font-semibold" style="color:var(--bad)" role="alert"></p>
+          <button class="btn btn-primary btn-lg w-full" type="submit" data-i18n="login.submit">Giriş</button>
+        </form>
+        <div class="mt-6 flex items-center justify-between text-sm">
+          <button id="theme" class="btn btn-ghost btn-sm" type="button" aria-label="Tema">◐ Tema</button>
+          <a class="underline muted" href="/apply">İşletme başvurusu</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+  const csrf = () => (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || "";
+  document.getElementById("theme").onclick = () => {
+    const d = !document.documentElement.classList.contains("dark");
+    document.documentElement.classList.toggle("dark", d);
+    try { localStorage.setItem("jet.theme", d ? "dark" : "light"); } catch (e) {}
+  };
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const body = Object.fromEntries(f.entries());
+    if (!body.otp) delete body.otp;
+    const err = document.getElementById("err");
+    err.textContent = "";
+    try {
+      const r = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() }, body: JSON.stringify(body), credentials: "same-origin" });
+      const j = await r.json();
+      if (r.ok) {
+        const next = new URLSearchParams(location.search).get("next") || (j.role === "waiter" && innerWidth < 900 ? "/waiter" : j.role === "kitchen" ? "/kds" : "/");
+        location.href = next.startsWith("/") ? next : "/";
+        return;
+      }
+      if (j.code === "otp_required") { document.getElementById("otp-wrap").classList.remove("hidden"); document.getElementById("otp").focus(); }
+      err.textContent = j.detail || "Giriş başarısız";
+    } catch (x) { err.textContent = "Sunucuya ulaşılamıyor. Yerel ağ bağlantısını kontrol edin."; }
+  });
+</script>
+{% endblock %}

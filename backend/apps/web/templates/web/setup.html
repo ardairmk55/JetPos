@@ -1,0 +1,84 @@
+{% extends "web/base.html" %}
+{% block title %}Kurulum sihirbazı — JETPOS{% endblock %}
+{% block body %}
+<main id="main" class="min-h-screen flex flex-col items-center p-4 md:p-10">
+  <div class="w-full max-w-3xl">
+    <div class="text-3xl font-black">JET<span class="text-jet">POS</span> <span class="text-base font-semibold muted">Kurulum sihirbazı</span></div>
+    <ol id="steps" class="flex flex-wrap gap-2 my-6 text-xs" aria-label="Adımlar"></ol>
+    <section class="card p-6" id="panel" aria-live="polite"></section>
+    <div class="flex justify-between mt-4"><button class="btn btn-ghost" id="prev">← Geri</button><button class="btn btn-primary btn-lg" id="next">İleri →</button></div>
+    <p class="text-xs muted mt-6">Manuel/teknik gelişmiş kurulum için docs/KURULUM.md dosyasına bakın. Sihirbaz yalnızca ilk kurulumda çalışır.</p>
+  </div>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+const csrf = () => (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || "";
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const S = { business: { name: "", template: "restaurant", phone: "", email: "", tax_office: "", tax_number: "" }, branch: { name: "Merkez", code: "MRK", address: "" },
+  halls: [{ name: "İç Salon", tables: 10, prefix: "" }], owner: { username: "", password: "", first_name: "", pin: "" }, users: [],
+  menu: { use_template: true }, taxes: [{ name: "", rate: "" }], printers: [], payment: { auto_close: false }, stock: { deduction: "send" },
+  security: { inactivity_lock_minutes: 5 }, backup: { time: "03:00" }, license_blob: "" };
+let checks = {};
+const STEPS = [
+  ["İşletme", () => `<h2 class="text-xl font-bold mb-4">İşletme bilgileri</h2><div class="grid sm:grid-cols-2 gap-3">
+    ${inp("business.name", "İşletme adı *")}${sel("business.template", "Şablon", [["restaurant","Restoran"],["cafe","Kafe"],["breakfast","Kahvaltı salonu"],["municipal","Belediye sosyal tesisi"],["other","Diğer"]])}
+    ${inp("business.phone", "Telefon")}${inp("business.email", "E-posta")}${inp("business.tax_office", "Vergi dairesi")}${inp("business.tax_number", "Vergi no")}</div>`],
+  ["Şube / salon", () => `<h2 class="text-xl font-bold mb-4">Şube ve salonlar</h2><div class="grid sm:grid-cols-3 gap-3 mb-4">${inp("branch.name", "Şube adı")}${inp("branch.code", "Şube kodu")}${inp("branch.address", "Adres")}</div>
+    <h3 class="font-semibold mb-2">Salonlar (iç salon, bahçe, teras…)</h3><div id="halls" class="space-y-2">${S.halls.map((h, i) => `<div class="grid grid-cols-6 gap-2"><input class="input col-span-3" value="${esc(h.name)}" data-h="${i}" data-f="name" placeholder="Salon adı"><input class="input col-span-2" type="number" min="0" value="${h.tables}" data-h="${i}" data-f="tables" title="Masa sayısı"><button class="btn btn-ghost" data-rm="${i}">✕</button></div>`).join("")}</div><button class="btn btn-ghost btn-sm mt-2" id="addhall">+ Salon</button>`],
+  ["Masalar", () => `<h2 class="text-xl font-bold mb-2">Masalar</h2><p class="muted text-sm mb-3">Her salon için masa sayısını önceki adımda belirlediniz. Masalar 1'den numaralanır; sonradan Masalar ekranında sürükle-bırak ile yerleştirilebilir.</p>${S.halls.map((h, i) => `<div class="grid grid-cols-3 gap-2 mb-2 items-center"><b>${esc(h.name)}</b><label class="text-sm">Masa öneki <input class="input" value="${esc(h.prefix||"")}" data-h="${i}" data-f="prefix" placeholder="ör. B"></label><span class="text-sm muted">${h.tables} masa → ${esc(h.prefix||"")}1…${esc(h.prefix||"")}${h.tables}</span></div>`).join("")}`],
+  ["Kullanıcılar", () => `<h2 class="text-xl font-bold mb-4">Yönetici ve personel</h2><div class="grid sm:grid-cols-2 gap-3 mb-4">${inp("owner.first_name","Yönetici adı")}${inp("owner.username","Yönetici kullanıcı adı *")}${inp("owner.password","Şifre * (en az 8 karakter)","password")}${inp("owner.pin","Hızlı PIN (4-8 rakam)","password")}</div>
+    <h3 class="font-semibold mb-2">Personel</h3><div id="users" class="space-y-2">${S.users.map((u, i) => `<div class="grid grid-cols-12 gap-2"><input class="input col-span-3" placeholder="Ad" value="${esc(u.first_name)}" data-u="${i}" data-f="first_name"><input class="input col-span-3" placeholder="Kullanıcı adı" value="${esc(u.username)}" data-u="${i}" data-f="username"><select class="input col-span-3" data-u="${i}" data-f="role">${[["waiter","Garson"],["cashier","Kasiyer"],["kitchen","Mutfak"],["branch_manager","Şube yöneticisi"],["stock","Stok"]].map(([k,l])=>`<option value="${k}" ${u.role===k?"selected":""}>${l}</option>`).join("")}</select><input class="input col-span-2" placeholder="PIN" value="${esc(u.pin)}" data-u="${i}" data-f="pin"><button class="btn btn-ghost" data-urm="${i}">✕</button></div>`).join("")}</div><button class="btn btn-ghost btn-sm mt-2" id="adduser">+ Personel</button><p class="text-xs muted mt-2">Personele geçici şifre otomatik atanır; ortak cihazlarda PIN ile giriş yaparlar. Şifreler Kullanıcılar ekranından değiştirilebilir.</p>`],
+  ["Menü", () => `<h2 class="text-xl font-bold mb-4">Menü ve vergiler</h2><label class="flex items-center gap-3 mb-4"><input type="checkbox" class="w-5 h-5" data-k="menu.use_template" ${S.menu.use_template?"checked":""}> Şablona göre kategori ve mutfak istasyonlarını oluştur (ürün ve fiyatlar sizin tarafınızdan girilir)</label>
+    <h3 class="font-semibold mb-2">Vergi oranları</h3><p class="text-xs muted mb-2">Mevzuata uygun KDV oranlarını mali müşavirinizle doğrulayarak girin.</p><div id="taxes" class="space-y-2">${S.taxes.map((t,i)=>`<div class="grid grid-cols-3 gap-2"><input class="input col-span-2" placeholder="Ad (ör. KDV yiyecek)" value="${esc(t.name)}" data-t="${i}" data-f="name"><input class="input" type="number" step="0.01" placeholder="Oran %" value="${esc(t.rate)}" data-t="${i}" data-f="rate"></div>`).join("")}</div><button class="btn btn-ghost btn-sm mt-2" id="addtax">+ Oran</button>`],
+  ["Yazıcı", () => `<h2 class="text-xl font-bold mb-2">Yazıcılar</h2><p class="muted text-sm mb-3">İsteğe bağlı. Ağ yazıcısında IP adresini yazıcının self-test çıktısından alın. Kurulum sonrası Yazıcılar ekranından test baskısı yapın.</p><div id="printers" class="space-y-2">${S.printers.map((p,i)=>`<div class="grid grid-cols-12 gap-2"><input class="input col-span-3" placeholder="Ad" value="${esc(p.name)}" data-p="${i}" data-f="name"><select class="input col-span-3" data-p="${i}" data-f="connection">${[["network","Ağ (IP)"],["windows","Windows yazıcı"],["file","Dosya (test)"]].map(([k,l])=>`<option value="${k}" ${p.connection===k?"selected":""}>${l}</option>`).join("")}</select><input class="input col-span-3" placeholder="IP / yazıcı adı" value="${esc(p.address)}" data-p="${i}" data-f="address"><select class="input col-span-2" data-p="${i}" data-f="target">${[["kitchen","Mutfak"],["bar","İçecek"],["cashier","Kasa"]].map(([k,l])=>`<option value="${k}" ${p.target===k?"selected":""}>${l}</option>`).join("")}</select><button class="btn btn-ghost" data-prm="${i}">✕</button></div>`).join("")}</div><button class="btn btn-ghost btn-sm mt-2" id="addprinter">+ Yazıcı</button>`],
+  ["Kasa / ödeme", () => `<h2 class="text-xl font-bold mb-4">Kasa ve ödeme</h2><label class="flex items-center gap-3 mb-3"><input type="checkbox" class="w-5 h-5" data-k="payment.auto_close" ${S.payment.auto_close?"checked":""}> Tam ödemede adisyonu otomatik kapat (kapalıysa masa boşaltılınca personel kapatır)</label>
+    ${sel("stock.deduction","Stok düşüm zamanı",[["send","Mutfağa gönderimde"],["prep","Hazırlık başlangıcında"],["payment","Ödemede"]])}<p class="text-xs muted mt-3">Ödeme yöntemleri: nakit, banka/kredi kartı, yemek kartı, açık hesap. Banka POS ve YN ÖKC entegrasyonları cihaz/protokol bilgisi gerektirir.</p>`],
+  ["Yedek / güvenlik", () => `<h2 class="text-xl font-bold mb-4">Yedekleme ve güvenlik</h2><div class="grid sm:grid-cols-2 gap-3">${inp("backup.time","Günlük otomatik yedek saati","time")}${inp("security.inactivity_lock_minutes","Hareketsizlikte otomatik kilit (dk)","number")}</div>
+    <h3 class="font-semibold mt-4 mb-1">Lisans (isteğe bağlı)</h3><textarea class="input" rows="3" data-k="license_blob" placeholder="İmzalı lisans metni (JETLIC1.…) — sonradan Ayarlar > Lisans'tan da girilebilir">${esc(S.license_blob)}</textarea>`],
+  ["Son kontrol", () => `<h2 class="text-xl font-bold mb-4">Son kontrol</h2><ul class="space-y-1 text-sm">
+    <li>İşletme: <b>${esc(S.business.name)||"—"}</b> (${esc(S.business.template)})</li><li>Şube: ${esc(S.branch.name)} · ${S.halls.length} salon · ${S.halls.reduce((a,h)=>a+Number(h.tables||0),0)} masa</li>
+    <li>Yönetici: ${esc(S.owner.username)||"—"} · ${S.users.length} personel</li><li>Yazıcı: ${S.printers.length}</li><li>Vergi oranı: ${S.taxes.filter(t=>t.name&&t.rate!=="").length}</li></ul>
+    <h3 class="font-semibold mt-4 mb-1">Sistem kontrolleri</h3><ul class="text-sm space-y-1"><li>Veritabanı: ${esc(checks.database)}</li><li>Boş disk: ${esc(checks.disk_free_gb)} GB</li><li>Lisans doğrulama anahtarı: ${checks.license_public_key?"✓":"yok (lisans sonra kurulabilir)"}</li><li>E-posta (SMTP): ${checks.smtp?"✓":"tanımsız — e-postalar dosyaya yazılır"}</li></ul>
+    <p id="err" class="mt-4 font-semibold" style="color:var(--bad)" role="alert"></p>`],
+];
+let step = 0;
+function get(path) { return path.split(".").reduce((o, k) => o[k], S); }
+function set(path, v) { const ks = path.split("."); const last = ks.pop(); ks.reduce((o, k) => o[k], S)[last] = v; }
+function inp(path, label, type = "text") { return `<div><label class="label">${label}</label><input class="input" type="${type}" data-k="${path}" value="${esc(get(path))}"></div>`; }
+function sel(path, label, opts) { return `<div><label class="label">${label}</label><select class="input" data-k="${path}">${opts.map(([k, l]) => `<option value="${k}" ${get(path) === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>`; }
+function render() {
+  document.getElementById("steps").innerHTML = STEPS.map(([n], i) => `<li class="chip ${i === step ? "active" : ""}">${i + 1}. ${n}</li>`).join("");
+  const p = document.getElementById("panel");
+  p.innerHTML = STEPS[step][1]();
+  p.querySelectorAll("[data-k]").forEach((el) => el.addEventListener("input", () => set(el.dataset.k, el.type === "checkbox" ? el.checked : el.value)));
+  p.querySelectorAll("[data-k][type=checkbox]").forEach((el) => el.addEventListener("change", () => set(el.dataset.k, el.checked)));
+  const bind = (attr, arr) => p.querySelectorAll(`[data-${attr}]`).forEach((el) => el.addEventListener("input", () => (S[arr][el.dataset[attr]][el.dataset.f] = el.value)));
+  bind("h", "halls"); bind("u", "users"); bind("t", "taxes"); bind("p", "printers");
+  const on = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = () => { fn(); render(); }; };
+  on("addhall", () => S.halls.push({ name: "", tables: 0, prefix: "" }));
+  on("adduser", () => S.users.push({ first_name: "", username: "", role: "waiter", pin: "" }));
+  on("addtax", () => S.taxes.push({ name: "", rate: "" }));
+  on("addprinter", () => S.printers.push({ name: "", connection: "network", address: "", target: "kitchen" }));
+  [["rm", "halls"], ["urm", "users"], ["prm", "printers"]].forEach(([a, arr]) => p.querySelectorAll(`[data-${a}]`).forEach((b) => (b.onclick = () => { S[arr].splice(Number(b.dataset[a]), 1); render(); })));
+  document.getElementById("prev").disabled = step === 0;
+  document.getElementById("next").textContent = step === STEPS.length - 1 ? "Kurulumu tamamla ✓" : "İleri →";
+}
+document.getElementById("prev").onclick = () => { step = Math.max(0, step - 1); render(); };
+document.getElementById("next").onclick = async () => {
+  if (step === 0 && !S.business.name.trim()) return alert("İşletme adı zorunlu");
+  if (step === 3 && (!S.owner.username || S.owner.password.length < 8)) return alert("Yönetici kullanıcı adı ve en az 8 karakterli şifre zorunlu");
+  if (step < STEPS.length - 1) { step++; return render(); }
+  const body = JSON.parse(JSON.stringify(S));
+  body.taxes = body.taxes.filter((t) => t.name && t.rate !== "");
+  body.users = body.users.filter((u) => u.username);
+  body.printers = body.printers.filter((p) => p.name);
+  if (!body.license_blob) delete body.license_blob;
+  const r = await fetch("/api/setup", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (r.ok) { alert("Kurulum tamamlandı. Yönetici hesabınızla giriş yapın."); location.href = "/login/"; }
+  else document.getElementById("err").textContent = j.detail || "Kurulum başarısız";
+};
+fetch("/api/setup").then((r) => r.json()).then((d) => { checks = d.checks || {}; if (!d.needed) location.href = "/login/"; render(); });
+</script>
+{% endblock %}
