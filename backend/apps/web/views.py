@@ -183,6 +183,16 @@ def run_setup(data, actor=None):
     from django.contrib.auth.password_validation import validate_password
 
     validate_password(owner_d["password"])
+    # Kullanıcı adları benzersiz olmalı; aksi halde veritabanı hatası (500) yerine açık bir uyarı verilir.
+    names = [owner_d["username"].strip()] + [u["username"].strip() for u in data.get("users") or [] if u.get("username")]
+    seen = set()
+    for n in names:
+        if n.lower() in seen:
+            raise BusinessError(f"'{n}' kullanıcı adı birden fazla kez girilmiş; her kullanıcı adı benzersiz olmalıdır")
+        seen.add(n.lower())
+    taken = User.objects.filter(username__in=names).values_list("username", flat=True).first()
+    if taken:
+        raise BusinessError(f"'{taken}' kullanıcı adı zaten kullanılıyor")
     tpl_key = biz_d.get("template", "restaurant")
     tpl = TEMPLATES.get(tpl_key, TEMPLATES["other"])
     with transaction.atomic():

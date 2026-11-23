@@ -113,6 +113,19 @@ def test_setup_wizard(api, db):
     assert c.post("/api/auth/login", {"username": "patron", "password": "Kurulum-Sifre-42"}, format="json").status_code == 200
 
 
+def test_setup_wizard_rejects_duplicate_usernames_without_500(api, db):
+    c = api()
+    c.raise_request_exception = False
+    base = {"business": {"name": "Cift Ad"}, "branch": {"name": "Merkez"},
+            "owner": {"username": "patron", "password": "Kurulum-Sifre-42"}}
+    for users in ([{"username": "patron", "role": "waiter"}],
+                  [{"username": "g1", "role": "waiter"}, {"username": "G1", "role": "cashier"}]):
+        r = c.post("/api/setup", {**base, "users": users}, format="json")
+        assert r.status_code == 400, (users, r.status_code, r.content)
+        assert "kullanıcı adı" in r.json()["detail"]
+    assert not Business.objects.exists() and not User.objects.exists()  # hiçbir şey yarım kalmaz
+
+
 def test_global_search_respects_roles(api, env, open_cash):
     tid = _sale(api, env, open_cash)
     num = Ticket.objects.get(pk=tid).number
