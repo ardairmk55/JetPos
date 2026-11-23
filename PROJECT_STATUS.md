@@ -77,7 +77,14 @@ Durum işaretleri: ✅ çalışır ve test edildi · 🟡 kısmi / sınırlı ·
 | Kontrast (WCAG AA) + taşma taraması: 25 rota × (768 px açık, 768 px koyu+yüksek kontrast, 768 px açık+yüksek kontrast) | ✅ | Bulunan 4 sorun düzeltildi: koyu temada `.btn-ok/.btn-danger` (`--on-solid`), açık temada `--faint` (3.84→AA), kenar çubuğu kısayol ipuçları. Sonuç: kontrast ihlali 0, taşma 0 |
 | Dokunma hedefi | ✅ | `.btn`/`.chip`/`.btn-icon` 44 px; `.btn-sm` 36 px (dokunmatikte 44). Yoğun yönetim tablolarında btn-sm 36 px kaldı |
 | Kritik POS akışı tarayıcıda uçtan uca | ✅ | Masa 3 aç → seçenekli ürün → mutfağa gönder (onay özeti) → KDS Başla/Hazır → Hazır siparişler → ödeme (nakit 320 ₺) → "Masayı kapat" onayı → adisyon `closed`; sahip hesabı, demo veri |
-| Dev sunucu önbelleği | ℹ️ | Şablon/context değişikliklerinde sunucu yeniden başlatılmalı (cached loader) |
+| Geniş tarama (2026-11-23) | ✅ | `manage.py check` ve `makemigrations --check` temiz; `check --deploy` yalnız HTTPS uyarıları (HTTPS opt-in, sertifika dış bilgi). 212 GET ucu × 9 rol: 5xx 0. Yeni `tests/test_endpoint_robustness.py`: tüm `/api/` rotaları × GET/POST/PATCH/DELETE × bozuk gövde × 3 rol → 5xx 0. Tam paket: **73/73 geçti (56 sn)** |
+| Rol bazlı arayüz taraması (garson, kasiyer, aşçı, depo, müdür, destek, platform) | ✅ | Menüdeki tüm sayfalar: JS hatası 0, taşma 0, boş/hatalı sayfa 0 (platform hariç, aşağıya bakın). Müdür hesabıyla 24 sayfada tüm "Yeni/Düzenle/Detay…" pencereleri hatasız açıldı |
+| Hata: platform/destek hesabı "Şube bağlamı bulunamadı" ile bozuk dashboard'a düşüyordu | ✅ düzeltildi | İşletmesiz hesap `/platform` (veya `/support`) sayfasına yönlenir, "Ana Sayfa" menüsü gizlenir |
+| Hata: Ayarlar sekmelerinde sayfa başlığı hep "Şubeler" idi | ✅ düzeltildi | `pageLabel` etkin menü öğesini kullanır |
+| İngilizce arayüz | ✅ / 🟡 | ~250 yeni çeviri + sunucudan gelen metinler dahil genel DOM çevirici (`trNode`) ve sayı kalıpları; yardım merkezi İngilizcesi artık çalışıyor. Veri adları (ürün/personel) elbette çevrilmez. Sistem sağlığı ekranındaki teknik metrik anahtarları (`disk_free_gb` vb.) ham kaldı |
+| WebSocket `/ws/branch/` | ✅ | Oturum açıkken bağlantı açılıyor |
+| Dev sunucu önbelleği | ℹ️ | Statik dosya düzenlendikten sonra dev sunucu (whitenoise) eski boyutla kesik dosya sunabiliyor → sunucuyu yeniden başlat. Üretimde `collectstatic` kullanılır. |
+| Dev sunucu önbelleği (şablon) | ℹ️ | Şablon/context değişikliklerinde sunucu yeniden başlatılmalı (cached loader) |
 | `J.chart` (zaten `--chart-*` token'lı, düz), `J.crud` (ikonlu "Yeni", iskelet yükleme, hata durumu), iskelet gradyanı kaldırıldı | ✅ | `ui.js`, `input.css` |
 | Kabuk/menü etiketlerinin İngilizcesi | ✅ | `i18n_en.js` +50 giriş |
 | Statik dosya önbellek sürümü (`?v=` = en yeni mtime) | ✅ | `apps/web/context.py` `ASSET_V`, `app.html`, `base.html` |

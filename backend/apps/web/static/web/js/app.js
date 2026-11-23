@@ -6,7 +6,7 @@
   // tab: aynı sayfanın belirli sekmesi · exclude: bu sekmeler başka bir menü öğesine ait
   const NAV = [
     { title: "Genel", items: [
-      { path: "/", label: "Ana Sayfa", icon: "layout-dashboard", page: "dashboard" },
+      { path: "/", label: "Ana Sayfa", icon: "layout-dashboard", page: "dashboard", business: true },
       { action: "search", label: "Arama", icon: "search", key: "/" },
       { path: "/notifications", label: "Bildirimler", icon: "bell", page: "notifications", badge: true },
     ] },
@@ -56,13 +56,36 @@
   const ALL_ITEMS = NAV.flatMap((g) => g.items).filter((i) => i.path);
   const ROUTES = [[/^\/ticket\/(\d+)$/, "ticket", (m) => ({ id: m[1] })],
     ...[...ALL_ITEMS, ...EXTRA_PAGES].map((n) => [new RegExp(`^${n.path.split("?")[0].replace(/\//g, "\\/")}$`), n.page, () => ({})])];
-  const pageLabel = (page) => (ALL_ITEMS.find((n) => n.page === page) || EXTRA_PAGES.find((n) => n.page === page) || { label: "Adisyon" }).label;
+  // Aynı sayfayı gösteren birden çok menü öğesinde (ör. Ayarlar sekmeleri) etkin olanın adı kullanılır
+  const pageLabel = (page) => {
+    const same = ALL_ITEMS.filter((n) => n.page === page);
+    return (same.find((n) => isActive(n)) || same[0] || EXTRA_PAGES.find((n) => n.page === page) || { label: "Adisyon" }).label;
+  };
 
   const visible = (n) => (!n.perm || J.can(n.perm)) && (!n.any || n.any.some(J.can)) && (!n.module || J.hasModule(n.module)) && (!n.business || J.state.me.business);
   const canView = (page) => { const items = ALL_ITEMS.filter((n) => n.page === page); return !items.length || items.some(visible); };
 
   // ------------------------------------------------------------------ tercihler
   const updateThemeIcon = () => { const dark = document.documentElement.classList.contains("dark"); qs("#theme-btn").innerHTML = J.icon(dark ? "sun" : "moon", 18); qs("#theme-btn").setAttribute("aria-label", dark ? "Açık temaya geç" : "Koyu temaya geç"); };
+  // İngilizce modda ekrana eklenen metinleri (sunucudan gelenler dahil) sözlükten çevirir
+  // Sayı içeren kalıplar (sözlükte tam eşleşmesi olmayan dinamik metinler)
+  const RULES = [[/(\d+) dk önce/g, "$1 min ago"], [/(\d+) dk\b/g, "$1 min"], [/(\d+) kişilik/g, "Seats $1"], [/(\d+) ürün\b/g, "$1 items"], [/(\d+) adet\b/g, "$1 pcs"],
+    [/^dün: /, "yesterday: "], [/^geçen hafta: /, "last week: "], [/· Parti (\d+)/g, "· Batch $1"], [/açan (\S+)/g, "opened by $1"], [/^Ortalama adisyon /, "Average ticket "], [/^Toplam /, "Total "], [/^Nakit: /, "Cash: "], [/· doğrulandı/, "· verified"]];
+  const trText = (v) => { const k = v.trim(); if (k && J.dict.en[k]) return v.replace(k, J.dict.en[k]); let o = v; RULES.forEach(([re, to]) => { o = o.replace(re, to); }); return o; };
+  const trNode = (root) => {
+    if (J.state.lang !== "en") return;
+    const d = J.dict.en;
+    if (root.nodeType === 3) { const o = trText(root.nodeValue); if (o !== root.nodeValue) root.nodeValue = o; return; }
+    if (root.nodeType !== 1 || /^(SCRIPT|STYLE|TEXTAREA|CODE)$/.test(root.tagName)) return;
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let n; const hits = [];
+    while ((n = w.nextNode())) { const o = trText(n.nodeValue); if (o !== n.nodeValue) hits.push([n, o]); }
+    hits.forEach(([node, o]) => { node.nodeValue = o; });
+    root.querySelectorAll?.("[placeholder],[title],[aria-label],[data-tip]").forEach((e) => ["placeholder", "title", "aria-label", "data-tip"].forEach((a) => { const v = e.getAttribute(a); if (v && d[v]) e.setAttribute(a, d[v]); }));
+  };
+  new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach(trNode))).observe(document.body, { childList: true, subtree: true });
+  J.translateDom = () => trNode(document.body);
+
   J.applyPrefs = (me) => {
     const root = document.documentElement;
     root.classList.toggle("dark", me.theme === "dark");
@@ -70,6 +93,7 @@
     root.style.setProperty("--font-scale", (me.font_scale || 100) / 100);
     root.lang = me.language || "tr";
     J.state.lang = me.language || "tr";
+    J.translateDom();
     try { localStorage.setItem("jet.theme", me.theme); } catch (e) {}
     qs("#lang-btn").textContent = (me.language || "tr").toUpperCase();
     qs("#gsearch").placeholder = me.language === "en" ? "Search tables, tickets, products, customers" : "Masa, adisyon, ürün, müşteri ara";
@@ -137,6 +161,8 @@
     for (const [re, page, args] of ROUTES) { const m = path.match(re); if (m) { hit = [page, args(m)]; break; } }
     markActive();
     if (!hit || !J.pages[hit[0]]) { main.innerHTML = stateBox("circle-alert", "Sayfa bulunamadı", "Adres hatalı veya sayfa kaldırılmış olabilir.", `<a class="btn btn-primary mt-2" href="/" data-link>Ana sayfaya dön</a>`); return; }
+    // İşletmesiz (platform/destek) hesapların şube özeti yok: platform ekranına yönlendir
+    if (hit[0] === "dashboard" && !J.state.me.business) { const alt = J.can("platform.manage") || J.can("license.manage") || J.can("platform.finance") ? "/platform" : "/support"; if (alt !== path) { J.go(alt, true); return; } }
     if (!canView(hit[0])) { main.innerHTML = stateBox("lock", "Bu ekran için yetkiniz yok", "Menüler rolünüze göre gösterilir. Erişim gerekiyorsa yöneticinizle görüşün."); return; }
     document.title = `${tt(pageLabel(hit[0]))} — JETPOS`;
     main.innerHTML = `<div class="space-y-3" aria-busy="true"><div class="skeleton" style="height:28px;width:220px"></div><div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:220px"></div></div>`;
