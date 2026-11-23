@@ -1,0 +1,5 @@
+{$POSHANE_DOMAIN:poshane.net}, www.{$POSHANE_DOMAIN:poshane.net} {
+	encode zstd gzip
+	# Caddy istemcinin X-Forwarded-For değerini kendi gördüğü adresle değiştirir (hız sınırı bunu kullanır).
+	reverse_proxy app:8000
+}

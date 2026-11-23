@@ -150,6 +150,9 @@ X_FRAME_OPTIONS = "DENY"
 if env_bool("JETPOS_HTTPS", False):
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    # TLS ters vekil (Caddy/Nginx) sonlandırır; uygulama yalnızca vekil arkasından erişilebilir olmalıdır.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_HSTS_SECONDS = int(os.environ.get("JETPOS_HSTS_SECONDS", 0))
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],

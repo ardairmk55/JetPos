@@ -1,0 +1,41 @@
+# POSHANE üretim kurulumu: uygulama + zamanlayıcı + Caddy (otomatik HTTPS).
+# Uygulama portu dışarıya AÇILMAZ; yalnızca Caddy üzerinden erişilir.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - poshane-data:/data
+    expose:
+      - "8000"
+
+  scheduler:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - poshane-data:/data
+    depends_on:
+      - app
+    command: ["python", "manage.py", "jetpos_scheduler"]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - POSHANE_DOMAIN=${POSHANE_DOMAIN:-poshane.net}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  poshane-data:
+  caddy-data:
+  caddy-config:

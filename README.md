@@ -8,6 +8,7 @@ Restoran, kafe, kahvaltı salonu ve belediye sosyal tesisleri için çok işletm
 |---|---|
 | [PROJECT_STATUS.md](PROJECT_STATUS.md) | Tamamlanan / eksik / dış bağımlı özellikler |
 | [docs/KURULUM.md](docs/KURULUM.md) | Sunucu kurulumu, PostgreSQL, ağ, yazıcı, lisans, istemciler |
+| [docs/YAYINLAMA.md](docs/YAYINLAMA.md) | İnternete yayınlama: Linux VPS, Docker, otomatik HTTPS (poshane.net) |
 | [docs/GUNCELLEME.md](docs/GUNCELLEME.md) | İmzalı güncelleme, yedek, rollback, USB/offline |
 | [docs/KULLANIM.md](docs/KULLANIM.md) | Rollere göre kullanım akışları |
 | [docs/MIMARI.md](docs/MIMARI.md) | Mimari, modüller, güvenlik, çevrimdışı/senkronizasyon |
