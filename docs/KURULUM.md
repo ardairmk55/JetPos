@@ -1,4 +1,4 @@
-# JETPOS Kurulum Kılavuzu
+# POSHANE Kurulum Kılavuzu
 
 ## 1. Gereksinimler
 | Bileşen | Gereksinim |
@@ -24,14 +24,14 @@ başlaması. Sonunda yerel ağ adresini yazar.
 İlk açılışta **kurulum sihirbazı** çalışır: işletme → şube/salon → masa → kullanıcı/rol → menü/vergi → yazıcı →
 kasa/ödeme → yedek/güvenlik → son kontrol. Şablonlar: restoran, kafe, kahvaltı salonu, belediye sosyal tesisi, diğer.
 
-> JETPOS hazır KDV oranı varsaymaz; sihirbaz oranları sorar. Mevzuata uygun oranları mali müşavirinizle doğrulayın.
+> POSHANE hazır KDV oranı varsaymaz; sihirbaz oranları sorar. Mevzuata uygun oranları mali müşavirinizle doğrulayın.
 
 ## 3. Manuel / teknik kurulum
 ```powershell
 python -m venv .venv
 .venv\Scripts\pip install -r backend\requirements.txt
 $env:DATABASE_URL="postgres://jetpos:...@localhost:5432/jetpos"
-$env:JETPOS_DATA_DIR="D:\JETPOS\data"
+$env:JETPOS_DATA_DIR="D:\POSHANE\data"
 cd backend
 ..\.venv\Scripts\python manage.py migrate
 ..\.venv\Scripts\python manage.py collectstatic --noinput
@@ -67,8 +67,8 @@ CREATE DATABASE jetpos OWNER jetpos ENCODING 'UTF8';
 ## 5. İstemciler
 | Cihaz | Kullanım |
 |---|---|
-| Kasa PC / Windows tablet | Tarayıcı veya Electron uygulaması: hazır paket `desktop\dist\JETPOS-win32-x64\JETPOS.exe` (klasörü kopyalayın; ilk açılışta sunucu adresi sorulur). Yeniden üretmek: `cd desktop && npm install && npm run package` |
-| Mutfak ekranı (KDS) | `JETPOS.exe --kds` (tam ekran kiosk) veya tarayıcıda `/kds` |
+| Kasa PC / Windows tablet | Tarayıcı veya Electron uygulaması: hazır paket `desktop\dist\POSHANE-win32-x64\POSHANE.exe` (klasörü kopyalayın; ilk açılışta sunucu adresi sorulur). Yeniden üretmek: `cd desktop && npm install && npm run package` |
+| Mutfak ekranı (KDS) | `POSHANE.exe --kds` (tam ekran kiosk) veya tarayıcıda `/kds` |
 | Garson telefonu | Tarayıcıda sunucu adresi → "Ana ekrana ekle" (PWA). Ağ koparsa siparişler cihazda kuyruğa alınır. |
 | Yönetici | Tarayıcı (web panel) |
 

@@ -1,8 +1,8 @@
-# JET Menü Entegrasyon Uçları (JETPOS tarafı)
+# JET Menü Entegrasyon Uçları (POSHANE tarafı)
 
 > **Açık karar (şartname §11):** JET Menü'nün (jetmenu.net) mevcut API ve veri modeli doğrulanmamıştır. Aşağıdaki
-> sözleşme JETPOS tarafında tanımlanmıştır; JET Menü sistemi incelendikten sonra eşleme kesinleştirilmelidir.
-> Sert bağımlılık yoktur: entegrasyon kapalıyken veya internet yokken JETPOS çalışmaya devam eder.
+> sözleşme POSHANE tarafında tanımlanmıştır; JET Menü sistemi incelendikten sonra eşleme kesinleştirilmelidir.
+> Sert bağımlılık yoktur: entegrasyon kapalıyken veya internet yokken POSHANE çalışmaya devam eder.
 
 Etkinleştirme: lisansta `jetmenu` modülü + Ayarlar > JET Menü > "Entegrasyon etkin". Gelen istekler
 `X-Integration-Token` başlığı ile doğrulanır (ayar ekranında gösterilir).

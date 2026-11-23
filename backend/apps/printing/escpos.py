@@ -67,7 +67,7 @@ def send(printer, data: bytes, spool_dir: Path, job_id=None):
         try:
             h = win32print.OpenPrinter(printer.address)
             try:
-                win32print.StartDocPrinter(h, 1, ("JETPOS", None, "RAW"))
+                win32print.StartDocPrinter(h, 1, ("POSHANE", None, "RAW"))
                 win32print.StartPagePrinter(h)
                 win32print.WritePrinter(h, data)
                 win32print.EndPagePrinter(h)

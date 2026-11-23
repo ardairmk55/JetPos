@@ -16,4 +16,4 @@ Set-Location (Join-Path $Root "backend")
 $ans = Read-Host "Güncelleme doğrulandı. Uygulansın mı? (önce otomatik yedek alınır) [e/H]"
 if ($ans -notin @("e", "E", "evet")) { Write-Host "İptal edildi."; exit 1 }
 & $Py manage.py jetpos_update apply --latest --yes
-Write-Host "Sunucuyu yeniden başlatın: Görev Zamanlayıcı > 'JETPOS Sunucu' > Yeniden başlat"
+Write-Host "Sunucuyu yeniden başlatın: Görev Zamanlayıcı > 'POSHANE Sunucu' > Yeniden başlat"

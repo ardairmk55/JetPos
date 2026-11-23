@@ -143,7 +143,7 @@ def enqueue_receipt(ticket):
 
 
 def enqueue_test(printer):
-    content = [{"text": "JETPOS TEST BASKISI", "align": "center", "bold": True, "size": "double"},
+    content = [{"text": "POSHANE TEST BASKISI", "align": "center", "bold": True, "size": "double"},
                {"text": printer.name, "align": "center"},
                {"text": f"{timezone.localtime():%d.%m.%Y %H:%M:%S}", "align": "center"},
                {"rule": True},

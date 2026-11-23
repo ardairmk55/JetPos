@@ -2,7 +2,7 @@
 
 FAQ = [
     {"q": "İnternet kesildi, satış yapabilir miyim?", "roles": "*",
-     "a": "Evet. Kasa, mutfak ve garson cihazları aynı yerel ağdaki JETPOS sunucusuna bağlı olduğu sürece çalışmaya devam eder. "
+     "a": "Evet. Kasa, mutfak ve garson cihazları aynı yerel ağdaki POSHANE sunucusuna bağlı olduğu sürece çalışmaya devam eder. "
           "E-posta, bulut yedek ve merkez senkronizasyonu bağlantı geldiğinde otomatik tamamlanır."},
     {"q": "Garson telefonu ağdan koptu, sipariş ne oldu?", "roles": "waiter,branch_manager,owner",
      "a": "Sipariş telefonda 'Gönderilmedi (kuyrukta)' olarak saklanır ve mutfağa ulaşmış görünmez. Bağlantı gelince otomatik "
@@ -16,7 +16,7 @@ FAQ = [
      "a": "Kasa ekranında 'Kasa sayımı' ile sayılan nakdi girin. Fark varsa nedenini yazın. Rapor otomatik oluşur; "
           "yönetici kontrol edip onaylayınca gün kapanır ve rapor arşivlenir."},
     {"q": "Termal adisyon çıktısı mali fiş midir?", "roles": "*",
-     "a": "Hayır. JETPOS'un yazdırdığı bilgi fişi yasal mali fiş yerine geçmez. Yasal fiş/fatura için uyumlu YN ÖKC/banka POS "
+     "a": "Hayır. POSHANE'nin yazdırdığı bilgi fişi yasal mali fiş yerine geçmez. Yasal fiş/fatura için uyumlu YN ÖKC/banka POS "
           "entegrasyonu gerekir."},
     {"q": "Yedekler nerede ve şifreli mi?", "roles": "owner,branch_manager",
      "a": "Yedekler sunucudaki veri klasöründe şifreli (.jbk) tutulur; tanımlıysa harici disk/NAS klasörlerine kopyalanır. "
@@ -65,9 +65,9 @@ DECISION_TREES = [
     {"id": "network", "title": "Cihaz sunucuya bağlanamıyor", "nodes": {
         "start": {"q": "Cihaz işletmenin Wi-Fi/yerel ağına bağlı mı?", "yes": "server", "no": "wifi"},
         "wifi": {"end": "Cihazı işletme ağına bağlayın. Misafir ağı sunucuya erişemeyebilir."},
-        "server": {"q": "Sunucu bilgisayar açık ve JETPOS hizmeti çalışıyor mu?", "yes": "fw", "no": "start_srv"},
-        "start_srv": {"end": "Sunucuda 'JETPOS' hizmetini başlatın (installer\\start_server.ps1)."},
-        "fw": {"end": "Windows güvenlik duvarında JETPOS portuna (varsayılan 8000) yerel ağ izni verildiğini kontrol edin."}}},
+        "server": {"q": "Sunucu bilgisayar açık ve POSHANE hizmeti çalışıyor mu?", "yes": "fw", "no": "start_srv"},
+        "start_srv": {"end": "Sunucuda 'POSHANE' hizmetini başlatın (installer\\start_server.ps1)."},
+        "fw": {"end": "Windows güvenlik duvarında POSHANE portuna (varsayılan 8000) yerel ağ izni verildiğini kontrol edin."}}},
     {"id": "cash_diff", "title": "Gün sonunda kasa farkı çıktı", "nodes": {
         "start": {"q": "Kasadan yapılan tüm gider/çıkışlar sisteme girildi mi?", "yes": "refund", "no": "enter"},
         "enter": {"end": "Eksik kasa hareketlerini gerekçeleriyle girin; beklenen tutar yeniden hesaplanır."},

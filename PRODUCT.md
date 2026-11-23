@@ -1,4 +1,4 @@
-# JETPOS — Product context
+# POSHANE — Product context
 
 > Inferred from the user's redesign brief (no interview run; assumptions labelled).
 
@@ -13,7 +13,7 @@
 - Owner / manager on a laptop: reports, stock, staff, settings, at the end of the day.
 - Platform/support staff: licences, tickets, health.
 
-**Brand:** JETPOS, tagline "Hızlı Servis, Akıllı Yönetim." Colours fixed by the owner: anthracite `#252936`, orange `#F28C28`, light canvas `#F5F6F8`, plus white and neutrals. Orange is scarce: primary actions, active state, brand mark only.
+**Brand:** POSHANE, tagline "Hızlı Servis, Akıllı Yönetim." Colours fixed by the owner: anthracite `#252936`, orange `#F28C28`, light canvas `#F5F6F8`, plus white and neutrals. Orange is scarce: primary actions, active state, brand mark only.
 
 **Personality:** professional, calm, quick, trustworthy. Closer to Toast / Lightspeed / Square operational density than to a generated analytics dashboard. (Assumption: dense-but-calm, 14 px base text.)
 

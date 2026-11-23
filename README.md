@@ -1,7 +1,7 @@
-# JETPOS — Hızlı Servis, Akıllı Yönetim.
+# POSHANE — Hızlı Servis, Akıllı Yönetim.
 
 Restoran, kafe, kahvaltı salonu ve belediye sosyal tesisleri için çok işletmeli, çok şubeli, **yerel ağda
-çevrimdışı çalışan** POS ve işletme yönetim platformu. Kaynak gereksinim: *JETPOS Teknik & Ürün Gereksinimleri
+çevrimdışı çalışan** POS ve işletme yönetim platformu. Kaynak gereksinim: *POSHANE Teknik & Ürün Gereksinimleri
 Şartnamesi v1.0*.
 
 | Belge | İçerik |

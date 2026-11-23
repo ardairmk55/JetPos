@@ -1,4 +1,4 @@
-/* JETPOS service worker — uygulama kabuğunu önbellekler; API çağrıları önbelleğe alınmaz.
+/* POSHANE service worker — uygulama kabuğunu önbellekler; API çağrıları önbelleğe alınmaz.
    Ağ yokken sipariş işlemleri IndexedDB kuyruğunda (core.js) bekler ve "mutfağa ulaştı" gösterilmez. */
 const CACHE = "jetpos-shell-v4";
 const SHELL = ["/waiter", "/static/web/app.css", "/static/web/js/core.js", "/static/web/js/icons.js", "/static/web/js/i18n_en.js", "/static/web/js/ui.js", "/static/web/js/pages_pos.js",

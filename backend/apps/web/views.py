@@ -60,7 +60,7 @@ def manifest(request):
     from django.http import JsonResponse
 
     return JsonResponse({
-        "name": "JETPOS", "short_name": "JETPOS", "description": "Hızlı Servis, Akıllı Yönetim.",
+        "name": "POSHANE", "short_name": "POSHANE", "description": "Hızlı Servis, Akıllı Yönetim.",
         "start_url": "/waiter", "scope": "/", "display": "standalone", "background_color": "#252936",
         "theme_color": "#252936", "lang": "tr",
         "icons": [{"src": "/static/web/img/icon-192.png", "sizes": "192x192", "type": "image/png"},

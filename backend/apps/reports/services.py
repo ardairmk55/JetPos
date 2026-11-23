@@ -382,7 +382,7 @@ def to_pdf(rep):
     styles = getSampleStyleSheet()
     for s in styles.byName.values():
         s.fontName = font
-    story = [Paragraph(f"JETPOS — {rep['title']}", styles["Title"]),
+    story = [Paragraph(f"POSHANE — {rep['title']}", styles["Title"]),
              Paragraph(f"{rep['branch']} · {rep['date_from']} – {rep['date_to']}", styles["Normal"]), Spacer(1, 10)]
     data = [rep["columns"]] + [[str(c) for c in r] for r in rep["rows"]]
     t = Table(data, repeatRows=1)
@@ -440,7 +440,7 @@ def run_due_schedules(now=None, max_attempts=3):
                 raise BusinessError("Alıcı tanımlı değil")
             rep = run_report(s.report_type, s.branch, dict(s.params, date_from=str(d1), date_to=str(d2)))
             fn, mime = EXPORTERS[s.fmt]
-            msg = EmailMessage(subject=f"[JETPOS] {s.name} ({d1} – {d2})",
+            msg = EmailMessage(subject=f"[POSHANE] {s.name} ({d1} – {d2})",
                                body=f"{s.branch.name} için {rep['title']} raporu ektedir.", to=s.recipients)
             msg.attach(f"jetpos_{s.report_type}_{d1}_{d2}.{s.fmt}", fn(rep), mime)
             msg.send(fail_silently=False)

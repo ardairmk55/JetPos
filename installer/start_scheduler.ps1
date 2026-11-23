@@ -1,4 +1,4 @@
-# JETPOS periyodik görevleri: otomatik yedek, saklama, geri yükleme testi, sağlık, yazdırma kuyruğu,
+# POSHANE periyodik görevleri: otomatik yedek, saklama, geri yükleme testi, sağlık, yazdırma kuyruğu,
 # senkronizasyon, hatırlatmalar, zamanlanmış raporlar, destek kayıt imhası.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot

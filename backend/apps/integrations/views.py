@@ -32,7 +32,7 @@ class JetMenuSettingsView(ModuleRequired, APIView):
         return Response({"config": ConfigSerializer(cfg).data,
                          "outbox": {"pending": q.filter(status="pending").count(), "failed": q.filter(status="failed").count(),
                                     "sent": q.filter(status="sent").count()},
-                         "note": "JET Menü mevcut API'si doğrulanmadı; sözleşme JETPOS tarafında tanımlıdır (docs/JETMENU_API.md)."})
+                         "note": "JET Menü mevcut API'si doğrulanmadı; sözleşme POSHANE tarafında tanımlıdır (docs/JETMENU_API.md)."})
 
     def patch(self, request):
         cfg, _ = IntegrationConfig.objects.get_or_create(business=current_business(request))

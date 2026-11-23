@@ -1,4 +1,4 @@
-# JETPOS Kullanım Kılavuzu
+# POSHANE Kullanım Kılavuzu
 
 Menüler role göre değişir; kullanıcı yalnızca işine uygun ekranları görür. Uygulama içi **Yardım** ekranında SSS,
 rehberler ve adım adım sorun giderme (karar ağacı) bulunur.
@@ -48,5 +48,5 @@ Platform yöneticisi, lisans yöneticisi, finans yöneticisi, teknik ekip ve des
 SLA hedefleri, ticari kayıtlar, bakım sözleşmeleri, sürüm notları, destek kuyruğu ve merkezi sağlık izleme.
 
 ## Önemli not
-JETPOS'un yazdırdığı termal adisyon/bilgi fişi **yasal mali fiş değildir**. Yasal fiş/fatura için uyumlu YN ÖKC/banka POS
+POSHANE'nin yazdırdığı termal adisyon/bilgi fişi **yasal mali fiş değildir**. Yasal fiş/fatura için uyumlu YN ÖKC/banka POS
 entegrasyonu gerekir (cihaz/protokol bilgisi şartnamede yoktur).

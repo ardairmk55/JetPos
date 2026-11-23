@@ -6,7 +6,7 @@ from .models import AuditLog, Branch, BranchSettings, Business, Device, LoginAtt
 
 @admin.register(User)
 class JetUserAdmin(UserAdmin):
-    fieldsets = UserAdmin.fieldsets + (("JETPOS", {"fields": ("business", "branch", "role", "phone", "department")}),)
+    fieldsets = UserAdmin.fieldsets + (("POSHANE", {"fields": ("business", "branch", "role", "phone", "department")}),)
     list_display = ("username", "first_name", "last_name", "role", "business", "branch", "is_active")
     list_filter = ("role", "is_active", "business")
 

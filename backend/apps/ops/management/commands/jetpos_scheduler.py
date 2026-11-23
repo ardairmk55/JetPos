@@ -67,7 +67,7 @@ def tick(now=None, state=None):
 
 
 class Command(BaseCommand):
-    help = "JETPOS periyodik görev zamanlayıcısı"
+    help = "POSHANE periyodik görev zamanlayıcısı"
 
     def add_arguments(self, parser):
         parser.add_argument("--once", action="store_true")

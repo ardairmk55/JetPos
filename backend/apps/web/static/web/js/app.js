@@ -1,4 +1,4 @@
-/* JETPOS uygulama kabuğu: gruplu rol bazlı menü, yönlendirme, arama, bildirim, kilit, kısayollar. */
+/* POSHANE uygulama kabuğu: gruplu rol bazlı menü, yönlendirme, arama, bildirim, kilit, kısayollar. */
 (function () {
   const { esc, h, qs, qsa, t, tt } = J;
 
@@ -178,7 +178,7 @@
     // İşletmesiz (platform/destek) hesapların şube özeti yok: platform ekranına yönlendir
     if (hit[0] === "dashboard" && !J.state.me.business) { const alt = J.can("platform.manage") || J.can("license.manage") || J.can("platform.finance") ? "/platform" : "/support"; if (alt !== path) { J.go(alt, true); return; } }
     if (!canView(hit[0])) { main.innerHTML = stateBox("lock", "Bu ekran için yetkiniz yok", "Menüler rolünüze göre gösterilir. Erişim gerekiyorsa yöneticinizle görüşün."); return; }
-    document.title = `${tt(pageLabel(hit[0]))} — JETPOS`;
+    document.title = `${tt(pageLabel(hit[0]))} — POSHANE`;
     main.innerHTML = `<div class="space-y-3" aria-busy="true"><div class="skeleton" style="height:28px;width:220px"></div><div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:220px"></div></div>`;
     try {
       main.innerHTML = "";
@@ -258,7 +258,7 @@
     const users = await J.get("auth/pin-users").catch(() => []);
     let selected = switchMode ? null : J.state.me.id;
     lock.innerHTML = "";
-    const box = h(`<div class="card p-6 w-full text-center" style="max-width:420px"><div class="flex items-center justify-center gap-2 mb-1"><span style="width:28px;height:28px;border-radius:6px;background:var(--accent);color:#1E222D;display:grid;place-items:center;font-weight:700;font-size:.8rem">J</span><b class="text-lg">JETPOS</b></div><p class="muted text-sm mb-4">${switchMode ? "Personel seçin ve PIN girin" : "Ekran kilitlendi. PIN ile devam edin."}</p>
+    const box = h(`<div class="card p-6 w-full text-center" style="max-width:420px"><div class="flex items-center justify-center gap-2 mb-1"><span style="width:28px;height:28px;border-radius:6px;background:var(--accent);color:#1E222D;display:grid;place-items:center;font-weight:700;font-size:.8rem">P</span><b class="text-lg">POSHANE</b></div><p class="muted text-sm mb-4">${switchMode ? "Personel seçin ve PIN girin" : "Ekran kilitlendi. PIN ile devam edin."}</p>
       <div class="flex flex-wrap gap-2 justify-center mb-4" data-users></div><div data-pad></div><p class="mt-3 text-sm font-medium" style="color:var(--bad);min-height:1.25rem" data-err role="alert"></p>
       <div class="mt-3 flex justify-center gap-2"><button class="btn btn-ghost btn-sm" data-pw>Şifre ile aç</button><button class="btn btn-ghost btn-sm" data-out>Çıkış yap</button></div></div>`);
     const ul = qs("[data-users]", box);

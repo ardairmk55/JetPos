@@ -399,7 +399,7 @@ def _email_creator(t, subject, body):
         from django.core.mail import send_mail
 
         try:
-            send_mail(f"[JETPOS Destek] {subject}", body, None, [t.created_by.email])
+            send_mail(f"[POSHANE Destek] {subject}", body, None, [t.created_by.email])
         except Exception:
             SupportEvent.objects.create(ticket=t, kind="email_failed", note=subject[:300])
 

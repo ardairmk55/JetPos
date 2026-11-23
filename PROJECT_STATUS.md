@@ -1,4 +1,4 @@
-# JETPOS — Proje Durumu
+# POSHANE — Proje Durumu
 
 Kaynak: `JETPOS_Teknik_Urun_Sartnamesi_v1.0.pdf` · Sürüm 1.0.0 · Son güncelleme: 18.11.2026
 
@@ -48,7 +48,7 @@ Durum işaretleri: ✅ çalışır ve test edildi · 🟡 kısmi / sınırlı ·
 | Raporlama: hazır + özel rapor, filtre, karşılaştırma, şablon, PDF/Excel/CSV/yazdır, otomatik gönderim + retry (§10.1) | ✅ | SMTP bilgisi ⛔ (yoksa dosyaya yazılır) |
 | Bildirim: uygulama içi, ses, öncelik, okundu, son 24 saat, rol/olay kuralları, e-posta (§10.2) | ✅ / ⛔ | Mobil push (uygulama kapalıyken) için VAPID/FCM ⛔ |
 | Yardım merkezi: SSS, rehber, karar ağacı, AI yok (§10.3, §19.1) | ✅ | Görsel/video içerik eklenmedi 🟡 |
-| JET Menü (§11) | 🟡 / 📝 | JETPOS tarafı uçlar + QR sipariş + imzalı çıkış kuyruğu + yazdırılabilir masa QR'ı (içerik şablonu ayarlanabilir) çalışır; JET Menü'nün gerçek API/URL biçimi doğrulanmadı |
+| JET Menü (§11) | 🟡 / 📝 | POSHANE tarafı uçlar + QR sipariş + imzalı çıkış kuyruğu + yazdırılabilir masa QR'ı (içerik şablonu ayarlanabilir) çalışır; JET Menü'nün gerçek API/URL biçimi doğrulanmadı |
 | Çok şube: şube seçimi, şube bazlı fiyat/görünürlük, merkez senkronizasyonu (§12) | ✅ / ⛔ | Merkez sunucu adresi ve altyapısı ⛔; senkronizasyon protokolü 📝 |
 | Güvenlik: audit (değiştirilemez), rate limit, şüpheli IP, şifreli yedek/ek (§15) | ✅ | HTTPS sertifikası ve ağ keşif/cihaz eşleştirme 📝 |
 | Teknik destek erişimi: onay, süre, kapsam, anonim veri, anında sonlandırma, işlem logu, şifreli/taranmış dosya, saklama-imha (§15.3, §19.3) | ✅ | Ekran kaydının kendisi uzaktan masaüstü aracına bağlı ⛔ (onay + kayıt saklama hazır) |
@@ -61,7 +61,7 @@ Durum işaretleri: ✅ çalışır ve test edildi · 🟡 kısmi / sınırlı ·
 | Akıllı kurulum: betik + sihirbaz + şablonlar (§18.1) | ✅ | Ağ/donanım testleri: yazıcı bağlantı testi var; tam donanım testi 🟡 |
 | Akıllı güncelleme: imza, yedek, onay, sağlık, rollback, USB (§18.2) | ✅ | Merkezden otomatik dağıtım sunucusu ⛔ |
 | Garson PWA + IndexedDB offline kuyruk (§13, §14) | ✅ | |
-| Electron Windows kabuğu + KDS kiosk (§13.1) | ✅ | `desktop/` — Electron 33; `npm run package` → `desktop/dist/JETPOS-win32-x64/JETPOS.exe` üretildi. Kod imzalama sertifikası ve kurulum sihirbazlı (MSI) paket ⛔/🟡 |
+| Electron Windows kabuğu + KDS kiosk (§13.1) | ✅ | `desktop/` — Electron 33; `npm run package` → `desktop/dist/POSHANE-win32-x64/POSHANE.exe` üretildi. Kod imzalama sertifikası ve kurulum sihirbazlı (MSI) paket ⛔/🟡 |
 
 ## UI/UX yeniden tasarım ve denetim (2026-11-23)
 | Kalem | Durum | Not |

@@ -1,4 +1,4 @@
-# JETPOS Güncelleme Kılavuzu
+# POSHANE Güncelleme Kılavuzu
 
 Şartname §18.2 ve NFR-07: sürüm kontrolü, imza/bütünlük doğrulama, güncelleme öncesi yedek, yönetici onayı, kurulum
 sonrası sağlık kontrolü ve başarısızlıkta rollback.

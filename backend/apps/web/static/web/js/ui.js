@@ -1,4 +1,4 @@
-/* JETPOS UI bileşenleri: modal, form, tablo, CRUD sayfası, grafik, PIN, onay akışı. */
+/* POSHANE UI bileşenleri: modal, form, tablo, CRUD sayfası, grafik, PIN, onay akışı. */
 (function () {
   const { esc, h, qs, qsa, t, tt } = J;
 

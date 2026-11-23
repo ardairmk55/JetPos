@@ -1,4 +1,4 @@
-/* JETPOS istemci çekirdeği: API, i18n, offline kuyruk, WebSocket, ses. Harici kütüphane yok (LAN offline). */
+/* POSHANE istemci çekirdeği: API, i18n, offline kuyruk, WebSocket, ses. Harici kütüphane yok (LAN offline). */
 (function () {
   const J = (window.J = {});
   J.state = { me: null, lang: "tr", ws: null, wsOk: false, online: navigator.onLine, listeners: {} };

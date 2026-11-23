@@ -1,4 +1,4 @@
-/** JETPOS Tailwind yapılandırması — çıktı: backend/apps/web/static/web/app.css */
+/** POSHANE Tailwind yapılandırması — çıktı: backend/apps/web/static/web/app.css */
 module.exports = {
   darkMode: "class",
   content: ["../backend/apps/web/templates/**/*.html", "../backend/apps/web/static/web/js/**/*.js"],

@@ -1,4 +1,4 @@
-# JETPOS ASGI sunucusunu (HTTP + WebSocket) yerel ağda başlatır.
+# POSHANE ASGI sunucusunu (HTTP + WebSocket) yerel ağda başlatır.
 # Güncelleme sistemi releases\current dosyasıyla aktif sürümü belirler; yoksa kurulum klasörü kullanılır.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot

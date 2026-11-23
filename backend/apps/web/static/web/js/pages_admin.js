@@ -269,7 +269,7 @@
   // ================================================================== MÜŞTERİ PORTALI
   P.portal = async (main) => {
     const d = await J.get("portal/summary");
-    main.appendChild(J.pageHead("Müşteri portalı", `${esc(d.business.name)} · JETPOS ${esc(d.version)}`));
+    main.appendChild(J.pageHead("Müşteri portalı", `${esc(d.business.name)} · POSHANE ${esc(d.version)}`));
     const L = d.license;
     main.appendChild(h(`<div class="grid md:grid-cols-3 gap-3">
       <div class="card p-4"><h3 class="font-semibold mb-2">Lisans ve paket</h3>${L.licensed ? kv({ Paket: L.package, Modüller: L.modules.join(", "), "Destek bitişi": L.support_until, "Şube hakkı": L.max_branches ?? "—", "Cihaz hakkı": `${L.max_terminals ?? "—"} terminal / ${L.max_mobile ?? "—"} mobil` }) : "Lisans kurulu değil"}<a class="btn btn-ghost btn-sm mt-2" href="/settings?tab=license" data-link>Lisans/cihaz yönetimi</a></div>

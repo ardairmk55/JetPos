@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  JETPOS yerel sunucu kurulumu (Windows Server / Windows 10-11).
+  POSHANE yerel sunucu kurulumu (Windows Server / Windows 10-11).
 .DESCRIPTION
   Python sanal ortamını kurar, bağımlılıkları yükler, veritabanını hazırlar, statik dosyaları toplar,
   yapılandırma dosyasını (jetpos.env) oluşturur ve isteğe bağlı olarak sunucu + zamanlayıcıyı
@@ -74,8 +74,8 @@ Pop-Location
 
 if ($OpenFirewall) {
   Step "Güvenlik duvarı kuralı (yalnızca özel/etki alanı ağı)"
-  if (-not (Get-NetFirewallRule -DisplayName "JETPOS $Port" -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName "JETPOS $Port" -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Private,Domain | Out-Null
+  if (-not (Get-NetFirewallRule -DisplayName "POSHANE $Port" -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName "POSHANE $Port" -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Private,Domain | Out-Null
   }
 }
 
@@ -83,7 +83,7 @@ if ($RegisterTasks) {
   Step "Açılışta otomatik başlatma (Görev Zamanlayıcı)"
   $srv = Join-Path $PSScriptRoot "start_server.ps1"
   $sch = Join-Path $PSScriptRoot "start_scheduler.ps1"
-  foreach ($t in @(@("JETPOS Sunucu", $srv), @("JETPOS Zamanlayici", $sch))) {
+  foreach ($t in @(@("POSHANE Sunucu", $srv), @("POSHANE Zamanlayici", $sch))) {
     $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$($t[1])`""
     $trigger = New-ScheduledTaskTrigger -AtStartup
     $settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)

@@ -10,7 +10,7 @@ def _token():
 
 
 class IntegrationConfig(models.Model):
-    """JET Menü bağlantısı. JET Menü mevcut API'si doğrulanmadığından (açık karar §11) JETPOS kendi uçlarını sunar;
+    """JET Menü bağlantısı. JET Menü mevcut API'si doğrulanmadığından (açık karar §11) POSHANE kendi uçlarını sunar;
     giden değişiklikler yapılandırılan webhook'a HMAC imzalı gönderilir."""
 
     business = models.OneToOneField(Business, on_delete=models.CASCADE, related_name="jetmenu")

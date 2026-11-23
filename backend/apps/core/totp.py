@@ -33,5 +33,5 @@ def verify(secret, code, window=1, at=None):
     return any(hmac.compare_digest(_code(secret, t + w), code) for w in range(-window, window + 1))
 
 
-def uri(secret, account, issuer="JETPOS"):
+def uri(secret, account, issuer="POSHANE"):
     return f"otpauth://totp/{quote(issuer)}:{quote(account)}?secret={secret}&issuer={quote(issuer)}"

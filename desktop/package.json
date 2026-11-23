@@ -1,13 +1,13 @@
 {
   "name": "jetpos-desktop",
   "version": "1.0.0",
-  "description": "JETPOS Windows masaüstü kabuğu (kasa PC / Windows tablet / tam ekran KDS)",
+  "description": "POSHANE Windows masaüstü kabuğu (kasa PC / Windows tablet / tam ekran KDS)",
   "main": "main.js",
   "private": true,
   "scripts": {
     "start": "electron .",
     "kds": "electron . --kds",
-    "package": "electron-packager . JETPOS --platform=win32 --arch=x64 --out=dist --overwrite --ignore=^/dist"
+    "package": "electron-packager . POSHANE --platform=win32 --arch=x64 --out=dist --overwrite --ignore=^/dist"
   },
   "devDependencies": {
     "electron": "33.2.1",

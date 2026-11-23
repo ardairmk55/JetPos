@@ -1,4 +1,4 @@
-// JETPOS Electron kabuğu: yerel ağdaki JETPOS sunucusunu tam ekran/pencere olarak açar.
+// POSHANE Electron kabuğu: yerel ağdaki POSHANE sunucusunu tam ekran/pencere olarak açar.
 // Sunucu adresi ilk açılışta sorulur ve kullanıcı veri klasöründe saklanır. --kds ile kiosk (tam ekran) mutfak ekranı.
 const { app, BrowserWindow, ipcMain, Menu, shell } = require("electron");
 const fs = require("fs");
@@ -13,7 +13,7 @@ let win;
 function createWindow() {
   const cfg = readCfg();
   win = new BrowserWindow({
-    width: 1366, height: 820, minWidth: 1024, minHeight: 640, backgroundColor: "#252936", title: "JETPOS",
+    width: 1366, height: 820, minWidth: 1024, minHeight: 640, backgroundColor: "#252936", title: "POSHANE",
     kiosk: KDS || !!cfg.kiosk, autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
@@ -41,7 +41,7 @@ ipcMain.handle("jetpos:save-config", (_e, cfg) => {
 });
 
 Menu.setApplicationMenu(Menu.buildFromTemplate([
-  { label: "JETPOS", submenu: [
+  { label: "POSHANE", submenu: [
     { label: "Sunucu ayarı", click: () => win.loadFile(path.join(__dirname, "setup.html")) },
     { label: "Yeniden yükle", accelerator: "F5", role: "reload" },
     { label: "Tam ekran", accelerator: "F11", role: "togglefullscreen" },

@@ -69,7 +69,7 @@ def notify(*, branch, event, title, body="", priority="low", roles=None, users=N
 def _email(to, subject, body):
     def _send():
         try:
-            send_mail(f"[JETPOS] {subject}", body or subject, None, [to], fail_silently=False)
+            send_mail(f"[POSHANE] {subject}", body or subject, None, [to], fail_silently=False)
         except Exception as exc:
             log.error("e-posta gönderilemedi %s: %s", to, exc)
 

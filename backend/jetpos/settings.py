@@ -1,4 +1,4 @@
-"""JETPOS ayarları.
+"""POSHANE ayarları.
 
 Tüm ortam bağımlı değerler ortam değişkenlerinden okunur (bkz. docs/KURULUM.md).
 """
@@ -172,7 +172,7 @@ else:
     EMAIL_FILE_PATH = DATA_DIR / "outbox_mail"
 DEFAULT_FROM_EMAIL = os.environ.get("JETPOS_MAIL_FROM", "jetpos@localhost")
 
-# JETPOS'a özgü
+# POSHANE'a özgü
 JETPOS = {
     "NODE_ID": os.environ.get("JETPOS_NODE_ID", "node-1"),
     "BACKUP_DIR": Path(os.environ.get("JETPOS_BACKUP_DIR", DATA_DIR / "backups")),

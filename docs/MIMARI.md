@@ -1,4 +1,4 @@
-# JETPOS Mimari
+# POSHANE Mimari
 
 ## Katmanlar
 ```
