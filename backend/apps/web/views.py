@@ -190,6 +190,9 @@ def run_setup(data, actor=None):
         if n.lower() in seen:
             raise BusinessError(f"'{n}' kullanıcı adı birden fazla kez girilmiş; her kullanıcı adı benzersiz olmalıdır")
         seen.add(n.lower())
+    for u in data.get("users") or []:
+        if u.get("username") and u.get("password"):
+            validate_password(u["password"])
     taken = User.objects.filter(username__in=names).values_list("username", flat=True).first()
     if taken:
         raise BusinessError(f"'{taken}' kullanıcı adı zaten kullanılıyor")

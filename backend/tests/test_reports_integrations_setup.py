@@ -101,7 +101,7 @@ def test_setup_wizard(api, db):
     payload = {"business": {"name": "Deneme Kahvaltı", "template": "breakfast"}, "branch": {"name": "Merkez"},
                "owner": {"username": "patron", "password": "Kurulum-Sifre-42", "pin": "4321"},
                "taxes": [{"name": "KDV", "rate": "10"}],
-               "halls": [{"name": "Salon", "tables": 4}], "users": [{"username": "g1", "role": "waiter", "pin": "1212"}],
+               "halls": [{"name": "Salon", "tables": 4}], "users": [{"username": "g1", "role": "waiter", "pin": "1212", "password": "Garson-Sifre-42"}],
                "printers": [{"name": "Mutfak", "connection": "file", "target": "kitchen", "station": "Mutfak"}],
                "security": {"inactivity_lock_minutes": 3}, "backup": {"time": "02:30"}}
     r = c.post("/api/setup", payload, format="json")
@@ -110,6 +110,7 @@ def test_setup_wizard(api, db):
     assert biz.template == "breakfast" and biz.branches.first().tables.count() == 4
     assert User.objects.get(username="g1").role == "waiter"
     assert c.post("/api/setup", payload, format="json").status_code == 403  # ikinci kez kurulamaz
+    assert c.post("/api/auth/login", {"username": "g1", "password": "Garson-Sifre-42"}, format="json").status_code == 200
     assert c.post("/api/auth/login", {"username": "patron", "password": "Kurulum-Sifre-42"}, format="json").status_code == 200
 
 
