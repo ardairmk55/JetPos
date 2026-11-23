@@ -74,8 +74,10 @@ Durum işaretleri: ✅ çalışır ve test edildi · 🟡 kısmi / sınırlı ·
 | Konsol/yükleme hatası taraması (29 rota) | ✅ | JS hatası 0, boş/hatalı sayfa 0 (1202 px) |
 | N+1 düzeltmeleri (katalog) | ✅ | `catalog/serializers.py`, `views.py` |
 | Testler | ✅ | 70/70 geçti (69 hızlı ~31 sn + yavaş restore testi ~35 sn); yeni `tests/test_dashboard.py` 3 test |
-| Karanlık tema (dashboard, ~800 px) görsel kontrolü | ✅ | Yalnız dashboard bakıldı; diğer ekranlar karanlıkta bakılmadı. Yüksek kontrast, tablet ⛔ TEST EDİLEMEDİ |
-| Kritik POS akışı tarayıcıda uçtan uca | 🟡 | API düzeyinde testlerle kapsanıyor; tarayıcıda elle tekrar edilmedi |
+| Kontrast (WCAG AA) + taşma taraması: 25 rota × (768 px açık, 768 px koyu+yüksek kontrast, 768 px açık+yüksek kontrast) | ✅ | Bulunan 4 sorun düzeltildi: koyu temada `.btn-ok/.btn-danger` (`--on-solid`), açık temada `--faint` (3.84→AA), kenar çubuğu kısayol ipuçları. Sonuç: kontrast ihlali 0, taşma 0 |
+| Dokunma hedefi | ✅ | `.btn`/`.chip`/`.btn-icon` 44 px; `.btn-sm` 36 px (dokunmatikte 44). Yoğun yönetim tablolarında btn-sm 36 px kaldı |
+| Kritik POS akışı tarayıcıda uçtan uca | ✅ | Masa 3 aç → seçenekli ürün → mutfağa gönder (onay özeti) → KDS Başla/Hazır → Hazır siparişler → ödeme (nakit 320 ₺) → "Masayı kapat" onayı → adisyon `closed`; sahip hesabı, demo veri |
+| Dev sunucu önbelleği | ℹ️ | Şablon/context değişikliklerinde sunucu yeniden başlatılmalı (cached loader) |
 | `J.chart` (zaten `--chart-*` token'lı, düz), `J.crud` (ikonlu "Yeni", iskelet yükleme, hata durumu), iskelet gradyanı kaldırıldı | ✅ | `ui.js`, `input.css` |
 | Kabuk/menü etiketlerinin İngilizcesi | ✅ | `i18n_en.js` +50 giriş |
 | Statik dosya önbellek sürümü (`?v=` = en yeni mtime) | ✅ | `apps/web/context.py` `ASSET_V`, `app.html`, `base.html` |

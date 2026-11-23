@@ -90,8 +90,8 @@
   };
   const collapsed = () => qs("#app").classList.contains("side-collapsed");
   const navItem = (it, sub) => {
-    if (it.action === "search") return `<button type="button" class="nav-item" data-action="search" title="${esc(t(it.label))}">${J.icon(it.icon, 18)}<span class="nav-label">${esc(t(it.label))}</span><kbd class="nav-kbd text-[10px] opacity-60">${it.key}</kbd></button>`;
-    return `<a href="${it.path}" data-link class="nav-item${sub ? " sub" : ""}" data-nav="${esc(it.path)}" title="${esc(t(it.label))}">${sub ? "" : J.icon(it.icon, 18)}<span class="nav-label">${esc(t(it.label))}</span>${it.badge ? `<span class="nav-badge" id="nav-notif-badge" style="display:none">0</span>` : ""}${it.key ? `<kbd class="nav-kbd text-[10px] opacity-60">${it.key}</kbd>` : ""}</a>`;
+    if (it.action === "search") return `<button type="button" class="nav-item" data-action="search" title="${esc(t(it.label))}">${J.icon(it.icon, 18)}<span class="nav-label">${esc(t(it.label))}</span><kbd class="nav-kbd text-[10px]">${it.key}</kbd></button>`;
+    return `<a href="${it.path}" data-link class="nav-item${sub ? " sub" : ""}" data-nav="${esc(it.path)}" title="${esc(t(it.label))}">${sub ? "" : J.icon(it.icon, 18)}<span class="nav-label">${esc(t(it.label))}</span>${it.badge ? `<span class="nav-badge" id="nav-notif-badge" style="display:none">0</span>` : ""}${it.key ? `<kbd class="nav-kbd text-[10px]">${it.key}</kbd>` : ""}</a>`;
   };
   let refreshBadge = null;
   const renderNav = () => {
