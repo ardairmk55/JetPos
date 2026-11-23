@@ -8,8 +8,8 @@
     const prev = document.activeElement;
     const el = h(`<div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-label="${esc(title || "")}">
       <div class="absolute inset-0 bg-black/50" data-x></div>
-      <div class="relative card w-full ${full ? "h-full sm:h-[92vh] max-w-6xl" : size} max-h-[94vh] flex flex-col rounded-b-none sm:rounded-xl">
-        <div class="flex items-center gap-3 px-5 py-3 border-b bd"><h2 class="text-lg font-bold flex-1">${esc(title || "")}</h2><button class="btn btn-ghost btn-sm" data-x aria-label="Kapat">✕</button></div>
+      <div class="relative float w-full ${full ? "h-full sm:h-[92vh] max-w-6xl" : size} max-h-[94vh] flex flex-col rounded-b-none sm:rounded-xl">
+        <div class="flex items-center gap-3 px-5 py-3 border-b bd"><h2 class="h2 flex-1" style="font-size:1.0625rem">${esc(title || "")}</h2><button class="btn btn-quiet btn-icon btn-sm" data-x aria-label="Kapat" type="button">${J.icon("x", 18)}</button></div>
         <div class="p-5 overflow-y-auto flex-1" data-body></div>
         <div class="flex flex-wrap gap-2 justify-end px-5 py-3 border-t bd empty:hidden" data-actions></div>
       </div></div>`);
@@ -118,7 +118,7 @@
 
   // ------------------------------------------------------------------ tablo
   J.table = (cols, rows, { empty = "Kayıt yok", onRow, actions } = {}) => {
-    if (!rows || !rows.length) return h(`<div class="p-8 text-center muted">${esc(t(empty))}</div>`);
+    if (!rows || !rows.length) return h(J.empty("inbox", empty, ""));
     const el = h(`<div class="overflow-x-auto"><table class="tbl"><thead><tr>${cols.map((c) => `<th scope="col" class="${c.right ? "text-right" : ""}">${esc(tt(c.label))}</th>`).join("")}${actions ? "<th></th>" : ""}</tr></thead><tbody></tbody></table></div>`);
     const tb = el.querySelector("tbody");
     rows.forEach((r) => {
@@ -140,31 +140,34 @@
     return el;
   };
 
-  J.badge = (text, color = "var(--info)") => `<span class="badge" style="background:color-mix(in srgb, ${color} 18%, transparent);color:${color}">${esc(text)}</span>`;
-  J.yes = (v) => (v ? J.badge("✓", "var(--ok)") : `<span class="muted">—</span>`);
+  /** Durum rozeti: renk yalnızca anlam taşır (ok/warn/bad/info); isteğe bağlı ikon adı. */
+  J.badge = (text, color = "var(--info)", icon = "") => `<span class="badge" style="background:color-mix(in srgb, ${color} 14%, var(--surface));color:${color}">${icon ? J.icon(icon, 12) : ""}${esc(text)}</span>`;
+  J.yes = (v) => (v ? `<span style="color:var(--ok)" title="Evet">${J.icon("check", 16)}<span class="sr-only-focusable">Evet</span></span>` : `<span class="faint" aria-label="Hayır">—</span>`);
+  /** Boş durum: ikon + başlık + açıklama (+ eylem). */
+  J.empty = (icon, title, text = "", action = "") => `<div class="empty"><div class="empty-ic">${J.icon(icon, 22)}</div><div class="empty-title">${esc(J.t(title))}</div>${text ? `<p>${esc(J.t(text))}</p>` : ""}${action}</div>`;
 
-  J.pageHead = (title, sub = "", right = "") => h(`<div class="flex flex-wrap items-end gap-3 mb-4"><div class="flex-1 min-w-[200px]"><h1 class="text-2xl font-bold">${esc(tt(title))}</h1>${sub ? `<p class="muted text-sm">${J.t(sub)}</p>` : ""}</div><div class="flex flex-wrap gap-2" data-right>${right}</div></div>`);
+  J.pageHead = (title, sub = "", right = "") => h(`<div class="page-head"><div class="flex-1 min-w-[200px]"><h1 class="h1">${esc(tt(title))}</h1>${sub ? `<p class="sub">${J.t(sub)}</p>` : ""}</div><div class="flex flex-wrap items-center gap-2" data-right>${right}</div></div>`);
 
   J.tabs = (container, tabs, initial) => {
-    const bar = h(`<div class="flex gap-2 overflow-x-auto pb-2 mb-3" role="tablist"></div>`);
+    const bar = h(`<div class="tabbar" role="tablist"></div>`);
     const body = h(`<div></div>`);
     container.append(bar, body);
     const visible = tabs.filter((x) => x.show !== false);
     const select = (key) => {
-      qsa("[role=tab]", bar).forEach((b) => { b.classList.toggle("active", b.dataset.k === key); b.setAttribute("aria-selected", b.dataset.k === key); });
+      qsa("[role=tab]", bar).forEach((b) => { b.setAttribute("aria-selected", String(b.dataset.k === key)); });
       body.innerHTML = "";
       const tab = visible.find((x) => x.key === key) || visible[0];
       Promise.resolve(tab.render(body)).catch(J.err);
-      try { history.replaceState(null, "", location.pathname + "?tab=" + tab.key); } catch (e) {}
+      try { history.replaceState(null, "", location.pathname + "?tab=" + tab.key); window.dispatchEvent(new Event("jet:tab")); } catch (e) {}
     };
-    visible.forEach((x) => { const b = h(`<button class="chip" role="tab" data-k="${x.key}">${esc(tt(x.label))}</button>`); b.onclick = () => select(x.key); bar.appendChild(b); });
+    visible.forEach((x) => { const b = h(`<button class="tab" role="tab" data-k="${x.key}" aria-selected="false">${esc(tt(x.label))}</button>`); b.onclick = () => select(x.key); bar.appendChild(b); });
     select(new URLSearchParams(location.search).get("tab") || initial || visible[0]?.key);
     return { select };
   };
 
   // ------------------------------------------------------------------ genel CRUD sayfası
   J.crud = (container, o) => {
-    const wrap = h(`<div class="card"><div class="flex flex-wrap items-center gap-2 p-3 border-b bd"><input class="input !w-64" type="search" placeholder="${esc(t("Ara"))}…" data-q aria-label="Ara"><div class="flex-1"></div><span data-extra></span></div><div data-list><div class="p-6 muted">${t("Yükleniyor…")}</div></div></div>`);
+    const wrap = h(`<div class="card"><div class="flex flex-wrap items-center gap-2 p-3 border-b bd"><input class="input !w-64" type="search" placeholder="${esc(t("Ara"))}…" data-q aria-label="Ara"><div class="flex-1"></div><span data-extra></span></div><div data-list><div class="p-3 space-y-2" aria-busy="true">${'<div class="skeleton h-9"></div>'.repeat(4)}</div></div></div>`);
     container.appendChild(wrap);
     const list = wrap.querySelector("[data-list]");
     let rows = [];
@@ -188,7 +191,7 @@
       try { await J.del(`${o.endpoint.split("?")[0]}/${r.id}`); J.toast("Tamamlandı", "ok"); load(); } catch (e) { J.err(e); }
     } });
     if (canWrite && o.fields && o.creatable !== false) {
-      const nb = h(`<button class="btn btn-primary btn-sm">+ ${t("Yeni")}</button>`);
+      const nb = h(`<button class="btn btn-primary btn-sm">${J.icon("plus", 16)}${t("Yeni")}</button>`);
       nb.onclick = () => edit(null);
       wrap.querySelector("[data-extra]").appendChild(nb);
     }
@@ -200,7 +203,7 @@
     };
     const load = async () => {
       try { const d = await J.get(o.endpoint + (o.query ? (o.endpoint.includes("?") ? "&" : "?") + o.query() : "")); rows = o.rows ? o.rows(d) : d; render(); }
-      catch (e) { list.innerHTML = `<div class="p-6" style="color:var(--bad)">${esc(e.data?.detail || "Yüklenemedi")}</div>`; }
+      catch (e) { list.innerHTML = J.empty("circle-alert", "Yüklenemedi", e.data?.detail || "Bağlantıyı kontrol edip yeniden deneyin."); }
     };
     wrap.querySelector("[data-q]").addEventListener("input", J.debounce(render, 150));
     load();
@@ -252,14 +255,14 @@
 
   // ------------------------------------------------------------------ PIN pad ve yetkili onayı
   J.pinPad = (onDone, { title = "PIN" } = {}) => {
-    const el = h(`<div class="max-w-xs mx-auto"><div class="text-center text-sm muted mb-2">${esc(title)}</div><div class="text-center text-3xl tracking-[.5em] h-12 font-bold" data-d aria-live="polite"></div><div class="grid grid-cols-3 gap-2 mt-2">${[1, 2, 3, 4, 5, 6, 7, 8, 9, "⌫", 0, "✓"].map((k) => `<button type="button" class="btn ${k === "✓" ? "btn-primary" : "btn-ghost"} btn-lg text-xl" data-k="${k}">${k}</button>`).join("")}</div></div>`);
+    const el = h(`<div class="max-w-xs mx-auto"><div class="text-center text-sm muted mb-2">${esc(title)}</div><div class="text-center text-3xl tracking-[.5em] h-12 font-bold" data-d aria-live="polite"></div><div class="grid grid-cols-3 gap-2 mt-2">${[1, 2, 3, 4, 5, 6, 7, 8, 9, "back", 0, "ok"].map((k) => `<button type="button" class="btn ${k === "ok" ? "btn-primary" : "btn-ghost"} btn-lg" style="font-size:1.25rem" data-k="${k}" aria-label="${k === "back" ? "Sil" : k === "ok" ? "Onayla" : k}">${k === "back" ? J.icon("undo-2", 22) : k === "ok" ? J.icon("check", 24) : k}</button>`).join("")}</div></div>`);
     let pin = "";
     const d = el.querySelector("[data-d]");
-    const upd = () => (d.textContent = "•".repeat(pin.length));
-    const press = (k) => { if (k === "⌫") pin = pin.slice(0, -1); else if (k === "✓") { if (pin.length >= 4) onDone(pin); } else if (pin.length < 8) pin += k; upd(); };
+    const upd = () => (d.innerHTML = Array.from(pin, () => `<span class="dot" style="--st:var(--text);width:.8rem;height:.8rem;margin:0 .3rem"></span>`).join(""));
+    const press = (k) => { if (k === "back") pin = pin.slice(0, -1); else if (k === "ok") { if (pin.length >= 4) onDone(pin); } else if (pin.length < 8) pin += k; upd(); };
     el.querySelectorAll("[data-k]").forEach((b) => (b.onclick = () => press(b.dataset.k)));
     el.tabIndex = 0;
-    el.addEventListener("keydown", (e) => { if (/^\d$/.test(e.key)) press(e.key); if (e.key === "Backspace") press("⌫"); if (e.key === "Enter") press("✓"); });
+    el.addEventListener("keydown", (e) => { if (/^\d$/.test(e.key)) press(e.key); if (e.key === "Backspace") press("back"); if (e.key === "Enter") press("ok"); });
     el.reset = () => { pin = ""; upd(); };
     return el;
   };

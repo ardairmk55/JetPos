@@ -63,6 +63,23 @@ Durum işaretleri: ✅ çalışır ve test edildi · 🟡 kısmi / sınırlı ·
 | Garson PWA + IndexedDB offline kuyruk (§13, §14) | ✅ | |
 | Electron Windows kabuğu + KDS kiosk (§13.1) | ✅ | `desktop/` — Electron 33; `npm run package` → `desktop/dist/JETPOS-win32-x64/JETPOS.exe` üretildi. Kod imzalama sertifikası ve kurulum sihirbazlı (MSI) paket ⛔/🟡 |
 
+## UI/UX yeniden tasarım ve denetim (2026-11-23)
+| Kalem | Durum | Not |
+|---|---|---|
+| Tasarım sistemi (token, IBM Plex Sans, Lucide `icons.js`, düz yüzeyler, turuncu az) | ✅ | `frontend/src/input.css`, `frontend/build-assets.mjs` |
+| Gruplu, rol-duyarlı, daralan kenar çubuğu + yeni üst bar | ✅ | `app.html`, `app.js` (`NAV`) |
+| Yeni dashboard (tarih seçici, 7 kart, 7 gün grafiği, karşılaştırma, ödeme dağılımı, operasyon listeleri) | ✅ | `P.dashboard`, `reports/services.py` `dashboard(day=)` |
+| Diğer ekranlarda emoji/glif → ikon | 🟡 | Emoji taraması temiz; her ekranın tek tek görsel incelemesi yapılmadı |
+| Yatay taşma | ✅ | Neden: görünmez `[data-tip]::after` tooltip'i. Düzeltme: tooltip `display:none` + `.shell{overflow-x:clip}`. 29 rota 1202 px'te, 24 rota 375 px'te taşma 0 |
+| Konsol/yükleme hatası taraması (29 rota) | ✅ | JS hatası 0, boş/hatalı sayfa 0 (1202 px) |
+| N+1 düzeltmeleri (katalog) | ✅ | `catalog/serializers.py`, `views.py` |
+| Testler | ✅ | 70/70 geçti (69 hızlı ~31 sn + yavaş restore testi ~35 sn); yeni `tests/test_dashboard.py` 3 test |
+| Karanlık tema (dashboard, ~800 px) görsel kontrolü | ✅ | Yalnız dashboard bakıldı; diğer ekranlar karanlıkta bakılmadı. Yüksek kontrast, tablet ⛔ TEST EDİLEMEDİ |
+| Kritik POS akışı tarayıcıda uçtan uca | 🟡 | API düzeyinde testlerle kapsanıyor; tarayıcıda elle tekrar edilmedi |
+| `J.chart` (zaten `--chart-*` token'lı, düz), `J.crud` (ikonlu "Yeni", iskelet yükleme, hata durumu), iskelet gradyanı kaldırıldı | ✅ | `ui.js`, `input.css` |
+| Kabuk/menü etiketlerinin İngilizcesi | ✅ | `i18n_en.js` +50 giriş |
+| Statik dosya önbellek sürümü (`?v=` = en yeni mtime) | ✅ | `apps/web/context.py` `ASSET_V`, `app.html`, `base.html` |
+
 ## Dış bilgi / erişim gerektirenler (uydurulmadı)
 - Banka POS ve YN ÖKC marka/model entegrasyonları (yasal mali fiş) — cihaz/protokol dokümanı gerekli.
 - JET Menü mevcut API'si, SMTP sunucusu, mobil push (VAPID/FCM), SMS sağlayıcısı, bulut yedek hedefi,

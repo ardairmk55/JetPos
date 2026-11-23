@@ -14,7 +14,7 @@
     J.tabs(c, [
       { key: "products", label: "Ürünler", render: (el) => J.crud(el, {
         title: "Ürün", endpoint: "products?all=1", perm, size: "max-w-3xl",
-        columns: [{ key: "name", label: "Ürün", html: (r) => `<b>${esc(r.name)}</b>${r.is_favorite ? " ★" : ""}${!r.is_active ? " " + J.badge("pasif", "var(--muted)") : ""}<div class="text-xs muted">${esc(r.sku || "")} ${esc(r.barcode || "")}</div>` },
+        columns: [{ key: "name", label: "Ürün", html: (r) => `<b>${esc(r.name)}</b>${r.is_favorite ? ` <span style="color:var(--accent-text)" title="Favori">${J.icon("star", 14)}</span>` : ""}${!r.is_active ? " " + J.badge("pasif", "var(--muted)") : ""}<div class="text-xs muted">${esc(r.sku || "")} ${esc(r.barcode || "")}</div>` },
           { key: "category_name", label: "Kategori" }, { key: "base_price", label: "Fiyat", right: true, fmt: money },
           { key: "effective_tax", label: "KDV %", right: true }, { key: "tax_included", label: "KDV dahil", html: (r) => J.yes(r.tax_included) }],
         fields: [{ name: "name", label: "Ad (TR)", required: true }, { name: "name_en", label: "Ad (EN)" },
@@ -342,7 +342,7 @@
       { key: "schedules", label: "Otomatik gönderim", render: (el) => {
         el.appendChild(h(`<p class="text-sm muted mb-2">Raporlar seçilen saatte e-posta ile gönderilir. SMTP sunucu bilgisi (JETPOS_SMTP_HOST) tanımlı değilse e-postalar sunucudaki outbox_mail klasörüne yazılır. Başarısız gönderim 3 kez denenir ve kaydedilir.</p>`));
         J.crud(el, { title: "Otomatik rapor", endpoint: "reports/schedules", perm: "reports.view",
-          columns: [{ key: "name", label: "Ad" }, { key: "report_type", label: "Rapor", fmt: (v) => meta.types[v] }, { key: "frequency", label: "Sıklık" }, { key: "send_time", label: "Saat" }, { key: "recipients", label: "Alıcılar", fmt: (v) => v.join(", ") }, { key: "fmt", label: "Format" }, { key: "last_delivery", label: "Son gönderim", html: (r) => r.last_delivery ? (r.last_delivery.ok ? J.badge("✓ " + r.last_delivery.period, "var(--ok)") : J.badge(`✗ ${r.last_delivery.attempts} deneme: ${r.last_delivery.error.slice(0, 60)}`, "var(--bad)")) : "—" }],
+          columns: [{ key: "name", label: "Ad" }, { key: "report_type", label: "Rapor", fmt: (v) => meta.types[v] }, { key: "frequency", label: "Sıklık" }, { key: "send_time", label: "Saat" }, { key: "recipients", label: "Alıcılar", fmt: (v) => v.join(", ") }, { key: "fmt", label: "Format" }, { key: "last_delivery", label: "Son gönderim", html: (r) => r.last_delivery ? (r.last_delivery.ok ? J.badge(r.last_delivery.period, "var(--ok)", "check") : J.badge(`${r.last_delivery.attempts} deneme: ${r.last_delivery.error.slice(0, 60)}`, "var(--bad)", "circle-alert")) : "—" }],
           fields: [{ name: "name", label: "Ad", required: true }, { name: "report_type", label: "Rapor", type: "select", required: true, options: Object.entries(meta.types).filter(([k]) => k !== "custom") }, { name: "frequency", label: "Sıklık", type: "select", required: true, options: [["daily", "Günlük (önceki gün)"], ["weekly", "Haftalık (önceki 7 gün)"], ["monthly", "Aylık (önceki ay)"]] }, { name: "send_time", label: "Saat", type: "time", required: true, default: "08:00" }, { name: "weekday", label: "Haftalık gün (0=Pzt)", type: "number", default: 0 }, { name: "month_day", label: "Aylık gün", type: "number", default: 1 }, { name: "recipients_text", label: "Alıcılar (virgülle)", required: true }, { name: "fmt", label: "Format", type: "select", required: true, options: [["pdf", "PDF"], ["xlsx", "Excel"], ["csv", "CSV"]] }, { name: "is_active", label: "Aktif", type: "checkbox", default: true }],
           toForm: (r) => ({ ...r, recipients_text: r.recipients.join(", ") }),
           toApi: (v) => { v.recipients = v.recipients_text.split(",").map((s) => s.trim()).filter(Boolean); delete v.recipients_text; return v; } });
@@ -360,7 +360,7 @@
     const load = async () => {
       const rows = await J.get(`notifications${all ? "?all=1" : ""}`);
       box.innerHTML = "";
-      box.appendChild(J.table([{ key: "created_at", label: "Zaman", fmt: J.dt }, { key: "priority", label: "Öncelik", html: (r) => J.badge(prio[r.priority][0], prio[r.priority][1]) }, { key: "title", label: "Başlık", html: (r) => `${r.read_at ? "" : "● "}<b>${esc(r.title)}</b><div class="text-xs muted">${esc(r.body)}</div>` }], rows, {
+      box.appendChild(J.table([{ key: "created_at", label: "Zaman", fmt: J.dt }, { key: "priority", label: "Öncelik", html: (r) => J.badge(prio[r.priority][0], prio[r.priority][1]) }, { key: "title", label: "Başlık", html: (r) => `${r.read_at ? "" : `<span class="dot" style="--st:var(--accent);margin-right:.4rem" aria-label="Okunmadı"></span>`}<b>${esc(r.title)}</b><div class="text-xs muted">${esc(r.body)}</div>` }], rows, {
         onRow: async (r) => { await J.post(`notifications/${r.id}/read`).catch(() => {}); if (r.data?.ticket) J.go(`/ticket/${r.data.ticket}`); else load(); } }));
       J.emit("notif-refresh");
     };

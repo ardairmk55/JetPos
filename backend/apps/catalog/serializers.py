@@ -104,7 +104,13 @@ class OptionGroupSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        data["options"] = OptionSerializer(instance.options.filter(is_active=True), many=True).data
+        cache = getattr(instance, "_prefetched_objects_cache", {})
+        if "options" in cache:
+            # views.py prefetches with Prefetch(..., queryset=Option.objects.filter(is_active=True)); reuse it, no extra query.
+            opts = cache["options"]
+        else:
+            opts = instance.options.filter(is_active=True)
+        data["options"] = OptionSerializer(opts, many=True).data
         return data
 
 

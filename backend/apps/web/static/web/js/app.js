@@ -1,42 +1,68 @@
-/* JETPOS uygulama kabuğu: rol bazlı menü, yönlendirme, arama, bildirim, kilit, kısayollar. */
+/* JETPOS uygulama kabuğu: gruplu rol bazlı menü, yönlendirme, arama, bildirim, kilit, kısayollar. */
 (function () {
   const { esc, h, qs, qsa, t, tt } = J;
+
+  // ------------------------------------------------------------------ menü yapısı (yalnızca gerçek modüller)
+  // tab: aynı sayfanın belirli sekmesi · exclude: bu sekmeler başka bir menü öğesine ait
   const NAV = [
-    { path: "/", label: "Ana sayfa", icon: "▣", page: "dashboard" },
-    { path: "/floor", label: "Masalar", icon: "▦", page: "floor", perm: "floor.view", key: "F2" },
-    { path: "/waiter", label: "Garson", icon: "📱", page: "waiter", perm: "ticket.open", mobileOnly: true },
-    { path: "/kds", label: "Mutfak", icon: "🍳", page: "kds", perm: "kds.view", key: "F3" },
-    { path: "/ready", label: "Hazır siparişler", icon: "🔔", page: "ready", perm: "ready.view" },
-    { path: "/approvals", label: "Onaylar", icon: "✔", page: "approvals", any: ["approvals.decide", "approvals.municipal"] },
-    { path: "/cash", label: "Kasa", icon: "₺", page: "cash", perm: "cash.manage", key: "F4" },
-    { path: "/payments", label: "Ödemeler", icon: "💳", page: "payments", perm: "payment.take" },
-    { path: "/tickets", label: "Adisyonlar", icon: "🧾", page: "tickets", perm: "floor.view" },
-    { sep: "Yönetim" },
-    { path: "/catalog", label: "Katalog", icon: "📋", page: "catalog", perm: "catalog.manage" },
-    { path: "/stock", label: "Stok", icon: "📦", page: "stock", perm: "stock.view", module: "stock" },
-    { path: "/customers", label: "Müşteriler", icon: "👤", page: "customers", perm: "crm.manage", module: "crm" },
-    { path: "/deliveries", label: "Kurye", icon: "🛵", page: "deliveries", perm: "delivery.manage", module: "delivery" },
-    { path: "/reservations", label: "Rezervasyon", icon: "📅", page: "reservations", perm: "reservation.manage", module: "reservation" },
-    { path: "/staff", label: "Personel", icon: "👥", page: "staff", perm: "staff.manage", module: "staff" },
-    { path: "/finance", label: "Finans", icon: "📈", page: "finance", perm: "finance.manage", module: "finance" },
-    { path: "/reports", label: "Raporlar", icon: "📊", page: "reports", perm: "reports.view" },
-    { sep: "Sistem" },
-    { path: "/users", label: "Kullanıcılar", icon: "🔑", page: "users", perm: "users.manage" },
-    { path: "/printers", label: "Yazıcılar", icon: "🖨", page: "printers", perm: "printers.manage" },
-    { path: "/settings", label: "Ayarlar", icon: "⚙", page: "settings" },
-    { path: "/ops", label: "Sistem", icon: "🛡", page: "ops", any: ["ops.manage", "health.view"] },
-    { path: "/portal", label: "Portal", icon: "🏢", page: "portal", perm: "settings.manage", business: true },
-    { path: "/support", label: "Destek", icon: "💬", page: "support", any: ["support.request", "support.manage"] },
-    { path: "/platform", label: "Platform", icon: "🌐", page: "platform", any: ["platform.manage", "license.manage", "platform.finance"] },
-    { path: "/audit", label: "Denetim kaydı", icon: "📜", page: "audit", perm: "audit.view" },
-    { path: "/notifications", label: "Bildirimler", icon: "🔔", page: "notifications", hidden: true },
-    { path: "/timeclock", label: "Giriş/Çıkış", icon: "⏱", page: "timeclock", hidden: true },
-    { path: "/help", label: "Yardım", icon: "?", page: "help" },
+    { title: "Genel", items: [
+      { path: "/", label: "Ana Sayfa", icon: "layout-dashboard", page: "dashboard" },
+      { action: "search", label: "Arama", icon: "search", key: "/" },
+      { path: "/notifications", label: "Bildirimler", icon: "bell", page: "notifications", badge: true },
+    ] },
+    { title: "Operasyon", items: [
+      { path: "/floor", label: "Masalar", icon: "layout-grid", page: "floor", perm: "floor.view", key: "F2" },
+      { path: "/waiter", label: "Garson", icon: "smartphone", page: "waiter", perm: "ticket.open" },
+      { path: "/kds", label: "Mutfak", icon: "chef-hat", page: "kds", perm: "kds.view", key: "F3" },
+      { path: "/ready", label: "Hazır Siparişler", icon: "bell-ring", page: "ready", perm: "ready.view" },
+      { path: "/approvals", label: "Onaylar", icon: "circle-check", page: "approvals", any: ["approvals.decide", "approvals.municipal"] },
+      { path: "/tickets", label: "Adisyonlar", icon: "receipt", page: "tickets", perm: "floor.view" },
+    ] },
+    { title: "Satış ve Finans", items: [
+      { path: "/cash", label: "Kasa", icon: "wallet", page: "cash", perm: "cash.manage", key: "F4" },
+      { path: "/payments", label: "Ödemeler", icon: "credit-card", page: "payments", perm: "payment.take" },
+      { path: "/finance", label: "Finans", icon: "trending-up", page: "finance", perm: "finance.manage", module: "finance" },
+      { path: "/reports", label: "Raporlar", icon: "chart-column", page: "reports", perm: "reports.view" },
+    ] },
+    { title: "İşletme Yönetimi", items: [
+      { path: "/catalog", label: "Katalog", icon: "book-open", page: "catalog", perm: "catalog.manage", exclude: ["products", "categories"], children: [
+        { path: "/catalog?tab=products", label: "Ürünler" },
+        { path: "/catalog?tab=categories", label: "Kategoriler" },
+      ] },
+      { path: "/stock", label: "Stok", icon: "package", page: "stock", perm: "stock.view", module: "stock" },
+      { path: "/customers", label: "Müşteriler", icon: "users", page: "customers", perm: "crm.manage", module: "crm" },
+      { path: "/deliveries", label: "Kurye", icon: "bike", page: "deliveries", perm: "delivery.manage", module: "delivery" },
+      { path: "/reservations", label: "Rezervasyonlar", icon: "calendar-days", page: "reservations", perm: "reservation.manage", module: "reservation" },
+    ] },
+    { title: "Organizasyon", items: [
+      { path: "/staff", label: "Personel", icon: "id-card", page: "staff", perm: "staff.manage", module: "staff" },
+      { path: "/settings?tab=business", label: "Şubeler", icon: "building-2", page: "settings", perm: "settings.manage" },
+      { path: "/users", label: "Kullanıcılar", icon: "key-round", page: "users", perm: "users.manage" },
+    ] },
+    { title: "Sistem", items: [
+      { path: "/settings?tab=jetmenu", label: "Entegrasyonlar", icon: "plug", page: "settings", perm: "settings.manage", module: "jetmenu" },
+      { path: "/printers", label: "Yazıcılar", icon: "printer", page: "printers", perm: "printers.manage" },
+      { path: "/ops?tab=backups", label: "Yedekleme", icon: "database-backup", page: "ops", any: ["ops.manage", "health.view"] },
+      { path: "/ops", label: "Sistem Durumu", icon: "activity", page: "ops", any: ["ops.manage", "health.view"], exclude: ["backups"] },
+      { path: "/settings", label: "Ayarlar", icon: "settings", page: "settings", exclude: ["business", "jetmenu"] },
+      { path: "/audit", label: "Denetim Kaydı", icon: "scroll-text", page: "audit", perm: "audit.view" },
+      { path: "/portal", label: "Müşteri Portalı", icon: "shield-check", page: "portal", perm: "settings.manage", business: true },
+      { path: "/platform", label: "Platform", icon: "globe", page: "platform", any: ["platform.manage", "license.manage", "platform.finance"] },
+      { path: "/support", label: "Destek", icon: "life-buoy", page: "support", any: ["support.request", "support.manage"] },
+      { path: "/help", label: "Yardım", icon: "circle-help", page: "help" },
+    ] },
   ];
-  const ROUTES = [[/^\/ticket\/(\d+)$/, "ticket", (m) => ({ id: m[1] })], ...NAV.filter((n) => n.path).map((n) => [new RegExp(`^${n.path.replace(/\//g, "\\/")}$`), n.page, () => ({})])];
-  const visible = (n) => !n.sep && !n.hidden && (!n.perm || J.can(n.perm)) && (!n.any || n.any.some(J.can)) && (!n.module || J.hasModule(n.module)) && (!n.business || J.state.me.business);
+  const EXTRA_PAGES = [{ path: "/timeclock", label: "Giriş / Çıkış", page: "timeclock" }];
+  const ALL_ITEMS = NAV.flatMap((g) => g.items).filter((i) => i.path);
+  const ROUTES = [[/^\/ticket\/(\d+)$/, "ticket", (m) => ({ id: m[1] })],
+    ...[...ALL_ITEMS, ...EXTRA_PAGES].map((n) => [new RegExp(`^${n.path.split("?")[0].replace(/\//g, "\\/")}$`), n.page, () => ({})])];
+  const pageLabel = (page) => (ALL_ITEMS.find((n) => n.page === page) || EXTRA_PAGES.find((n) => n.page === page) || { label: "Adisyon" }).label;
+
+  const visible = (n) => (!n.perm || J.can(n.perm)) && (!n.any || n.any.some(J.can)) && (!n.module || J.hasModule(n.module)) && (!n.business || J.state.me.business);
+  const canView = (page) => { const items = ALL_ITEMS.filter((n) => n.page === page); return !items.length || items.some(visible); };
 
   // ------------------------------------------------------------------ tercihler
+  const updateThemeIcon = () => { const dark = document.documentElement.classList.contains("dark"); qs("#theme-btn").innerHTML = J.icon(dark ? "sun" : "moon", 18); qs("#theme-btn").setAttribute("aria-label", dark ? "Açık temaya geç" : "Koyu temaya geç"); };
   J.applyPrefs = (me) => {
     const root = document.documentElement;
     root.classList.toggle("dark", me.theme === "dark");
@@ -46,43 +72,79 @@
     J.state.lang = me.language || "tr";
     try { localStorage.setItem("jet.theme", me.theme); } catch (e) {}
     qs("#lang-btn").textContent = (me.language || "tr").toUpperCase();
-    qs("#gsearch").placeholder = me.language === "en" ? "Search: table, ticket, product, customer…  ( / )" : "Ara: masa, adisyon, ürün, müşteri…  ( / )";
+    qs("#gsearch").placeholder = me.language === "en" ? "Search tables, tickets, products, customers" : "Masa, adisyon, ürün, müşteri ara";
+    updateThemeIcon();
   };
 
   // ------------------------------------------------------------------ menü
-  const renderNav = () => {
-    const html = NAV.filter((n) => n.sep || visible(n)).map((n) => (n.sep ? `<div class="px-3 pt-4 pb-1 text-[11px] uppercase tracking-wider text-ink-300">${esc(t(n.sep))}</div>` : `<a href="${n.path}" data-link class="nav-item" data-path="${n.path}"><span class="w-5 text-center" aria-hidden="true">${n.icon}</span><span class="flex-1">${esc(t(n.label))}</span>${n.key ? `<kbd class="text-[10px] opacity-60">${n.key}</kbd>` : ""}</a>`)).join("");
-    qs("#nav").innerHTML = html;
-    qs("#drawer-nav").innerHTML = `<div class="text-2xl font-black px-2 py-3">JET<span class="text-jet">POS</span></div>` + html;
-    qs("#side-foot").innerHTML = `${esc(J.state.me.business_name || "Platform")}<br>${esc(J.state.me.branch_name || "")} · v${esc(window.JET_VERSION)}`;
-    markActive();
+  const curTab = () => new URLSearchParams(location.search).get("tab");
+  const isActive = (it) => {
+    const u = new URL(it.path, location.origin);
+    const p = location.pathname.replace(/\/$/, "") || "/";
+    const here = u.pathname === "/" ? p === "/" : p === u.pathname || p.startsWith(u.pathname + "/");
+    if (!here) return false;
+    const tab = u.searchParams.get("tab");
+    if (tab) return curTab() === tab;
+    if (it.exclude) return !it.exclude.includes(curTab());
+    return true;
   };
-  const markActive = () => qsa("[data-path]").forEach((a) => a.classList.toggle("active", a.dataset.path === location.pathname || (a.dataset.path !== "/" && location.pathname.startsWith(a.dataset.path))));
+  const collapsed = () => qs("#app").classList.contains("side-collapsed");
+  const navItem = (it, sub) => {
+    if (it.action === "search") return `<button type="button" class="nav-item" data-action="search" title="${esc(t(it.label))}">${J.icon(it.icon, 18)}<span class="nav-label">${esc(t(it.label))}</span><kbd class="nav-kbd text-[10px] opacity-60">${it.key}</kbd></button>`;
+    return `<a href="${it.path}" data-link class="nav-item${sub ? " sub" : ""}" data-nav="${esc(it.path)}" title="${esc(t(it.label))}">${sub ? "" : J.icon(it.icon, 18)}<span class="nav-label">${esc(t(it.label))}</span>${it.badge ? `<span class="nav-badge" id="nav-notif-badge" style="display:none">0</span>` : ""}${it.key ? `<kbd class="nav-kbd text-[10px] opacity-60">${it.key}</kbd>` : ""}</a>`;
+  };
+  let refreshBadge = null;
+  const renderNav = () => {
+    const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => i.action || visible(i)) })).filter((g) => g.items.length);
+    qs("#nav").innerHTML = groups.map((g) => `<div class="nav-group" role="group" aria-label="${esc(t(g.title))}"><div class="nav-title">${esc(t(g.title))}</div>${g.items.map((it) => navItem(it) + (it.children ? `<div data-children="${esc(it.path)}" hidden>${it.children.map((c) => navItem(c, true)).join("")}</div>` : "")).join("")}</div>`).join("");
+    qsa("[data-action=search]").forEach((b) => (b.onclick = () => { closeDrawer(); qs("#gsearch").focus(); }));
+    markActive();
+    refreshBadge?.();
+  };
+  const markActive = () => {
+    qsa("[data-nav]").forEach((a) => {
+      const it = ALL_ITEMS.find((n) => n.path === a.dataset.nav) || NAV.flatMap((g) => g.items).flatMap((i) => i.children || []).find((c) => c.path === a.dataset.nav);
+      if (it && isActive(it)) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    });
+    qsa("[data-children]").forEach((c) => { c.hidden = !(c.querySelector("[aria-current]") || location.pathname.startsWith(c.dataset.children.split("?")[0])); });
+  };
+  window.addEventListener("jet:tab", markActive);
+
+  const closeDrawer = () => { qs("#app").classList.remove("nav-open"); qs("#scrim").classList.add("hidden"); };
+  const openDrawer = () => { qs("#app").classList.add("nav-open"); qs("#scrim").classList.remove("hidden"); };
+  const setCollapsed = (c, persist = true) => {
+    qs("#app").classList.toggle("side-collapsed", c);
+    const b = qs("#collapse-btn");
+    b.innerHTML = `${J.icon(c ? "chevrons-right" : "chevrons-left", 18)}<span class="nav-label">${t("Menüyü daralt")}</span>`;
+    b.setAttribute("aria-label", c ? t("Menüyü genişlet") : t("Menüyü daralt"));
+    b.title = c ? t("Menüyü genişlet") : t("Menüyü daralt");
+    if (persist) try { localStorage.setItem("jet.side", c ? "1" : "0"); } catch (e) {}
+  };
 
   // ------------------------------------------------------------------ yönlendirme
   let cleanup = null;
   J.go = (path, replace = false) => { (replace ? history.replaceState : history.pushState).call(history, null, "", path); route(); };
+  const stateBox = (icon, title, text, action = "") => `<div class="card"><div class="empty"><div class="empty-ic">${J.icon(icon, 22)}</div><div class="empty-title">${esc(title)}</div><p>${esc(text)}</p>${action}</div></div>`;
   const route = async () => {
     const path = location.pathname.replace(/\/$/, "") || "/";
     const main = qs("#main");
     try { cleanup?.(); } catch (e) {}
     cleanup = null;
     main.innerHTML = "";
-    main.className = "flex-1 p-3 md:p-5";
-    qs("#drawer").classList.add("hidden");
+    main.className = "page";
+    closeDrawer();
     let hit = null;
     for (const [re, page, args] of ROUTES) { const m = path.match(re); if (m) { hit = [page, args(m)]; break; } }
     markActive();
-    if (!hit || !J.pages[hit[0]]) { main.innerHTML = `<div class="card p-10 text-center"><h1 class="text-2xl font-bold">Sayfa bulunamadı</h1><a class="btn btn-primary mt-4" href="/" data-link>Ana sayfa</a></div>`; return; }
-    const nav = NAV.find((n) => n.page === hit[0]);
-    if (nav && nav.path && !visible(nav) && !nav.hidden && hit[0] !== "waiter") { main.innerHTML = `<div class="card p-10 text-center"><h1 class="text-xl font-bold">Bu ekran için yetkiniz yok</h1><p class="muted mt-2">Menüler rolünüze göre gösterilir.</p></div>`; return; }
-    document.title = `${tt(nav?.label || "Adisyon")} — JETPOS`;
-    main.innerHTML = `<div class="muted p-6">${t("Yükleniyor…")}</div>`;
+    if (!hit || !J.pages[hit[0]]) { main.innerHTML = stateBox("circle-alert", "Sayfa bulunamadı", "Adres hatalı veya sayfa kaldırılmış olabilir.", `<a class="btn btn-primary mt-2" href="/" data-link>Ana sayfaya dön</a>`); return; }
+    if (!canView(hit[0])) { main.innerHTML = stateBox("lock", "Bu ekran için yetkiniz yok", "Menüler rolünüze göre gösterilir. Erişim gerekiyorsa yöneticinizle görüşün."); return; }
+    document.title = `${tt(pageLabel(hit[0]))} — JETPOS`;
+    main.innerHTML = `<div class="space-y-3" aria-busy="true"><div class="skeleton" style="height:28px;width:220px"></div><div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:220px"></div></div>`;
     try {
       main.innerHTML = "";
       cleanup = (await J.pages[hit[0]](main, hit[1])) || null;
     } catch (e) {
-      main.innerHTML = `<div class="card p-8"><h2 class="font-bold text-lg mb-2">Ekran yüklenemedi</h2><p class="muted">${esc(e?.data?.detail || e?.message || "Bağlantı hatası")}</p><button class="btn btn-primary mt-4" onclick="location.reload()">Yeniden dene</button></div>`;
+      main.innerHTML = stateBox("triangle-alert", "Ekran yüklenemedi", e?.data?.detail || (navigator.onLine ? "Sunucuya ulaşılamadı. Bağlantıyı kontrol edip yeniden deneyin." : "İnternet/yerel ağ bağlantısı yok."), `<button class="btn btn-primary mt-2" onclick="location.reload()">Yeniden dene</button>`);
       if (!(e instanceof J.ApiError)) console.error(e);
     }
     main.focus({ preventScroll: true });
@@ -96,16 +158,18 @@
   // ------------------------------------------------------------------ global arama
   const setupSearch = () => {
     const inp = qs("#gsearch"), box = qs("#gsearch-res");
-    const icons = { table: "▦", ticket: "🧾", product: "🍽", category: "📋", staff: "👤", customer: "🙍", payment: "💳", reservation: "📅", stock: "📦", history: "📜" };
+    qs("#search-ic").innerHTML = J.icon("search", 16);
+    const icons = { table: "layout-grid", ticket: "receipt", product: "utensils", category: "book-open", staff: "user-round", customer: "users", payment: "credit-card", reservation: "calendar-days", stock: "package", history: "scroll-text" };
+    const kinds = { table: "Masa", ticket: "Adisyon", product: "Ürün", category: "Kategori", staff: "Personel", customer: "Müşteri", payment: "Ödeme", reservation: "Rezervasyon", stock: "Stok", history: "Kayıt" };
     const show = (html) => { box.innerHTML = html; box.classList.toggle("hidden", !html); };
     const run = J.debounce(async () => {
       const q = inp.value.trim();
       try {
         const d = await J.get(`search?q=${encodeURIComponent(q)}`);
-        if (!q) return show(d.recent?.length ? `<div class="p-2 text-xs muted">Son aramalar</div>${d.recent.map((r) => `<button class="w-full text-left px-3 py-2 hover:surface-2" data-q="${esc(r)}">⟲ ${esc(r)}</button>`).join("")}` : "");
-        const rows = d.results.map((r, i) => `<a href="${esc(r.url)}" data-link class="flex gap-3 px-3 py-2 hover:surface-2 ${i === 0 ? "surface-2" : ""}" role="option"><span>${icons[r.kind] || "•"}</span><span class="flex-1"><b>${esc(r.label)}</b><span class="block text-xs muted">${esc(r.sub)}</span></span><span class="text-xs muted">${esc(r.kind)}</span></a>`).join("");
-        const sug = d.suggestions?.length ? `<div class="p-2 text-xs muted border-t bd">Öneriler: ${d.suggestions.map((s) => `<button class="underline mr-2" data-q="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : "";
-        show(rows || `<div class="p-4 muted text-sm">Sonuç yok (arama yetkilerinize göre filtrelenir)</div>` + sug);
+        if (!q) return show(d.recent?.length ? `<div class="px-3 py-1 text-xs muted">Son aramalar</div>${d.recent.map((r) => `<button class="menu-item" data-q="${esc(r)}">${J.icon("history", 16)}${esc(r)}</button>`).join("")}` : "");
+        const rows = d.results.map((r) => `<a href="${esc(r.url)}" data-link class="menu-item" role="option">${J.icon(icons[r.kind] || "file-text", 16)}<span class="flex-1 min-w-0"><span class="block truncate font-medium">${esc(r.label)}</span><span class="block truncate text-xs muted">${esc(r.sub)}</span></span><span class="text-xs muted">${esc(t(kinds[r.kind] || r.kind))}</span></a>`).join("");
+        const sug = d.suggestions?.length ? `<div class="px-3 py-2 text-xs muted border-t bd">Öneri: ${d.suggestions.map((s) => `<button class="underline mr-2" data-q="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : "";
+        show(rows ? rows + sug : `<div class="px-3 py-4 text-sm muted">Sonuç bulunamadı. Aramanız rolünüzün yetkileriyle sınırlıdır.</div>${sug}`);
       } catch (e) { show(""); }
     }, 200);
     inp.addEventListener("input", run);
@@ -118,15 +182,20 @@
   // ------------------------------------------------------------------ bildirimler
   const setupNotifications = () => {
     const btn = qs("#notif-btn"), panel = qs("#notif-panel"), count = qs("#notif-count");
-    const refresh = async () => { try { const { count: n } = await J.get("notifications/unread_count"); count.textContent = n; count.classList.toggle("hidden", !n); } catch (e) {} };
+    qs("#notif-ic").innerHTML = J.icon("bell", 18);
+    refreshBadge = () => J.get("notifications/unread_count").then(({ count: n }) => {
+      count.textContent = n > 99 ? "99+" : n; count.style.display = n ? "grid" : "none";
+      const nb = qs("#nav-notif-badge"); if (nb) { nb.textContent = n > 99 ? "99+" : n; nb.style.display = n ? "inline-grid" : "none"; }
+    }).catch(() => {});
+    const refresh = () => refreshBadge();
     btn.onclick = async () => {
       if (!panel.classList.contains("hidden")) return panel.classList.add("hidden");
       const list = await J.get("notifications").catch(() => []);
-      panel.innerHTML = `<div class="flex items-center p-2"><b class="flex-1">${t("Bildirimler")}</b><button class="btn btn-ghost btn-sm" data-all>Tümünü okundu yap</button></div>` +
-        (list.slice(0, 30).map((n) => `<button class="w-full text-left p-2 rounded hover:surface-2 flex gap-2" data-id="${n.id}" data-ticket="${n.data?.ticket || ""}"><span>${n.read_at ? "○" : "●"}</span><span class="flex-1"><b class="text-sm">${esc(n.title)}</b><span class="block text-xs muted">${esc(n.body)} · ${J.dt(n.created_at)}</span></span></button>`).join("") || `<div class="p-4 muted text-sm">Son 24 saatte bildirim yok</div>`) +
-        `<a href="/notifications" data-link class="block text-center text-sm p-2 underline">Tüm geçmiş</a>`;
+      panel.innerHTML = `<div class="flex items-center px-3 py-2"><b class="flex-1 text-sm">${t("Bildirimler")}</b><button class="btn btn-quiet btn-sm" data-all>Tümünü okundu yap</button></div>` +
+        (list.slice(0, 30).map((n) => `<button class="menu-item" style="align-items:flex-start;padding-top:.5rem;padding-bottom:.5rem" data-id="${n.id}" data-ticket="${n.data?.ticket || ""}"><span class="dot" style="--st:${n.read_at ? "var(--border-strong)" : "var(--accent)"};margin-top:.4rem"></span><span class="flex-1 min-w-0"><b class="block text-sm font-medium">${esc(n.title)}</b><span class="block text-xs muted">${esc(n.body)} · ${J.dt(n.created_at)}</span></span></button>`).join("") || `<div class="empty" style="padding:1.5rem 1rem"><div class="empty-ic">${J.icon("inbox", 20)}</div><p>Son 24 saatte bildirim yok.</p></div>`) +
+        `<a href="/notifications" data-link class="block text-center text-sm p-2 underline muted">Tüm geçmiş</a>`;
       panel.classList.remove("hidden");
-      qs("[data-all]", panel).onclick = async () => { await J.post("notifications/read_all"); panel.classList.add("hidden"); refresh(); };
+      qs("[data-all]", panel)?.addEventListener("click", async () => { await J.post("notifications/read_all"); panel.classList.add("hidden"); refresh(); });
       qsa("[data-id]", panel).forEach((b) => (b.onclick = async () => { await J.post(`notifications/${b.dataset.id}/read`).catch(() => {}); panel.classList.add("hidden"); refresh(); if (b.dataset.ticket) J.go(`/ticket/${b.dataset.ticket}`); }));
     };
     document.addEventListener("click", (e) => { if (!e.target.closest("#notif-btn, #notif-panel")) panel.classList.add("hidden"); });
@@ -142,22 +211,23 @@
   };
 
   // ------------------------------------------------------------------ kilit ekranı ve PIN ile personel değişimi
+  let lastAct = Date.now();
   const lockScreen = async (switchMode = false) => {
     const lock = qs("#lock");
     if (!switchMode) await J.post("auth/lock").catch(() => {});
     const users = await J.get("auth/pin-users").catch(() => []);
     let selected = switchMode ? null : J.state.me.id;
     lock.innerHTML = "";
-    const box = h(`<div class="card p-6 w-full max-w-md text-center"><div class="text-3xl font-black mb-1">JET<span class="text-jet">POS</span></div><p class="muted text-sm mb-4">${switchMode ? "Personel seçin ve PIN girin" : "Ekran kilitlendi"}</p>
-      <div class="flex flex-wrap gap-2 justify-center mb-4" data-users></div><div data-pad></div><p class="mt-3 text-sm font-semibold" style="color:var(--bad)" data-err role="alert"></p>
-      <div class="mt-4 flex justify-center gap-2"><button class="btn btn-ghost btn-sm" data-pw>Şifre ile aç</button><button class="btn btn-ghost btn-sm" data-out>Çıkış</button></div></div>`);
+    const box = h(`<div class="card p-6 w-full text-center" style="max-width:420px"><div class="flex items-center justify-center gap-2 mb-1"><span style="width:28px;height:28px;border-radius:6px;background:var(--accent);color:#1E222D;display:grid;place-items:center;font-weight:700;font-size:.8rem">J</span><b class="text-lg">JETPOS</b></div><p class="muted text-sm mb-4">${switchMode ? "Personel seçin ve PIN girin" : "Ekran kilitlendi. PIN ile devam edin."}</p>
+      <div class="flex flex-wrap gap-2 justify-center mb-4" data-users></div><div data-pad></div><p class="mt-3 text-sm font-medium" style="color:var(--bad);min-height:1.25rem" data-err role="alert"></p>
+      <div class="mt-3 flex justify-center gap-2"><button class="btn btn-ghost btn-sm" data-pw>Şifre ile aç</button><button class="btn btn-ghost btn-sm" data-out>Çıkış yap</button></div></div>`);
     const ul = qs("[data-users]", box);
     const drawUsers = () => { ul.innerHTML = ""; users.forEach((u) => { const b = h(`<button class="chip ${u.id === selected ? "active" : ""}">${esc(u.name)}</button>`); b.onclick = () => { selected = u.id; drawUsers(); }; ul.appendChild(b); }); };
     drawUsers();
     const pad = J.pinPad(async (pin) => {
       try {
         if (selected === J.state.me.id && !switchMode) await J.post("auth/unlock", { pin });
-        else { if (!selected) throw new J.ApiError(400, { detail: "Personel seçin" }); await J.post("auth/pin-switch", { user_id: selected, pin }); location.reload(); return; }
+        else { if (!selected) throw new J.ApiError(400, { detail: "Önce personel seçin" }); await J.post("auth/pin-switch", { user_id: selected, pin }); location.reload(); return; }
         lock.classList.add("hidden"); lock.innerHTML = ""; lastAct = Date.now();
       } catch (e) { qs("[data-err]", box).textContent = e.data?.detail || "Hata"; pad.reset(); }
     }, { title: "PIN" });
@@ -169,24 +239,36 @@
     setTimeout(() => pad.focus(), 50);
   };
   J.lockScreen = lockScreen;
-  let lastAct = Date.now();
   ["pointerdown", "keydown"].forEach((ev) => document.addEventListener(ev, () => (lastAct = Date.now()), { passive: true }));
   J.on("locked", () => qs("#lock").classList.contains("hidden") && lockScreen());
 
-  // ------------------------------------------------------------------ üst çubuk
+  // ------------------------------------------------------------------ yan menü alt alanı, üst çubuk
+  const initials = (me) => (((me.first_name || me.username || "?")[0] || "") + ((me.last_name || "")[0] || "")).toUpperCase();
   const setupHeader = () => {
     const me = J.state.me;
-    qs("#user-name").textContent = me.first_name || me.username;
+    const full = [me.first_name, me.last_name].filter(Boolean).join(" ") || me.username;
+    qs("#user-avatar").textContent = initials(me);
+    qs("#user-name").textContent = full;
+    qs("#user-ctx").textContent = [me.business_name, me.branch_name].filter(Boolean).join(" · ") || me.role_label;
+    qs("#user-chev").innerHTML = J.icon("chevron-down", 16);
+    qs("#ctx").innerHTML = me.business_name ? `${J.icon("store", 16)}<span class="truncate font-medium" style="color:var(--text)">${esc(me.business_name)}</span>${me.branch_name ? `<span class="faint">/</span><span class="truncate">${esc(me.branch_name)}</span>` : ""}` : `<span>Platform yönetimi</span>`;
+    qs("#menu-btn").innerHTML = J.icon("menu", 20);
+    qs("#menu-btn").onclick = openDrawer;
+    qs("#scrim").onclick = closeDrawer;
+    qs("#nav").addEventListener("click", (e) => { if (e.target.closest("a")) closeDrawer(); });
+    qs("#collapse-btn").onclick = () => setCollapsed(!collapsed());
+    let stored = null; try { stored = localStorage.getItem("jet.side"); } catch (e) {}
+    setCollapsed(stored === null ? innerWidth >= 1024 && innerWidth < 1280 : stored === "1", false);
     qs("#theme-btn").onclick = async () => { me.theme = me.theme === "dark" ? "light" : "dark"; J.applyPrefs(me); await J.post("auth/preferences", { theme: me.theme }).catch(() => {}); J.emit("theme"); };
-    qs("#lang-btn").onclick = async () => { me.language = me.language === "en" ? "tr" : "en"; await J.post("auth/preferences", { language: me.language }).catch(() => {}); J.applyPrefs(me); renderNav(); route(); };
-    const um = qs("#user-menu");
-    const items = [["Tercihler", () => J.go("/settings?tab=prefs")], ...(J.hasModule("staff") ? [["Giriş/Çıkış", () => J.go("/timeclock")]] : []), ["Kullanıcı değiştir", () => lockScreen(true)], ["Kilitle", () => lockScreen()], ["Çıkış", async () => { await J.post("auth/logout").catch(() => {}); location.href = "/login/"; }]];
-    um.innerHTML = `<div class="px-3 py-2 text-xs muted">${esc(me.role_label)}</div>`;
-    items.forEach(([l, fn]) => { const b = h(`<button class="w-full text-left px-3 py-2 rounded hover:surface-2 text-sm" role="menuitem">${esc(t(l))}</button>`); b.onclick = () => { um.classList.add("hidden"); fn(); }; um.appendChild(b); });
-    qs("#user-btn").onclick = () => um.classList.toggle("hidden");
-    document.addEventListener("click", (e) => { if (!e.target.closest("#user-btn, #user-menu")) um.classList.add("hidden"); });
-    qs("#menu-btn").onclick = () => qs("#drawer").classList.remove("hidden");
-    qs("#drawer").addEventListener("click", (e) => { if (e.target.dataset.close !== undefined || e.target.closest("a")) qs("#drawer").classList.add("hidden"); });
+    qs("#lang-btn").onclick = async () => { me.language = me.language === "en" ? "tr" : "en"; await J.post("auth/preferences", { language: me.language }).catch(() => {}); J.applyPrefs(me); renderNav(); setCollapsed(collapsed(), false); route(); };
+
+    const um = qs("#user-menu"), ub = qs("#user-btn");
+    const items = [["Tercihler", "sliders-horizontal", () => J.go("/settings?tab=prefs")], ...(J.hasModule("staff") ? [["Giriş / Çıkış", "clock", () => J.go("/timeclock")]] : []), ["Kullanıcı değiştir", "users", () => lockScreen(true)], ["Ekranı kilitle", "lock", () => lockScreen()], ["Çıkış yap", "log-out", async () => { await J.post("auth/logout").catch(() => {}); location.href = "/login/"; }]];
+    um.innerHTML = `<div class="px-3 py-2"><div class="text-sm font-medium">${esc(full)}</div><div class="text-xs muted">${esc(me.role_label)} · v${esc(window.JET_VERSION)}</div></div><div class="border-t bd my-1"></div>`;
+    items.forEach(([l, ic, fn]) => { const b = h(`<button class="menu-item" role="menuitem">${J.icon(ic, 16)}${esc(t(l))}</button>`); b.onclick = () => { um.classList.add("hidden"); ub.setAttribute("aria-expanded", "false"); fn(); }; um.appendChild(b); });
+    ub.onclick = () => { const o = um.classList.toggle("hidden"); ub.setAttribute("aria-expanded", String(!o)); };
+    document.addEventListener("click", (e) => { if (!e.target.closest("#user-btn, #user-menu")) { um.classList.add("hidden"); ub.setAttribute("aria-expanded", "false"); } });
+
     if (me.branches?.length > 1) {
       const sel = qs("#branch-sel");
       sel.innerHTML = me.branches.map((b) => `<option value="${b.id}" ${b.id === me.branch ? "selected" : ""}>${esc(b.name)}</option>`).join("");
@@ -197,11 +279,11 @@
     const paintNet = () => {
       const ok = navigator.onLine && J.state.wsOk;
       net.classList.toggle("hidden", ok);
-      net.textContent = !navigator.onLine ? `⚠ ${t("Bağlantı yok")}` : "⚠ Canlı bağlantı yeniden kuruluyor";
-      net.style.background = "var(--bad)"; net.style.color = "#fff";
+      net.innerHTML = `${J.icon("wifi-off", 14)}${!navigator.onLine ? t("Bağlantı yok") : "Canlı bağlantı kuruluyor"}`;
+      net.style.background = "var(--bad-soft)"; net.style.color = "var(--bad)";
     };
     J.on("net", paintNet);
-    J.on("queue", (n) => { qb.classList.toggle("hidden", !n); qb.textContent = `⏳ ${n} ${t("Kuyrukta")} — gönderilmedi`; qb.title = "Bu işlemler sunucuya/mutfağa henüz ulaşmadı"; });
+    J.on("queue", (n) => { qb.classList.toggle("hidden", !n); qb.innerHTML = `${J.icon("clock", 14)}${n} ${t("Kuyrukta")}`; qb.style.background = "var(--warn-soft)"; qb.style.color = "var(--warn)"; qb.title = "Bu işlemler sunucuya/mutfağa henüz ulaşmadı"; });
     J.queue.refresh().catch(() => {});
     setTimeout(paintNet, 3000);
   };
@@ -212,7 +294,8 @@
       const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName);
       if ((e.key === "/" && !typing) || (e.ctrlKey && e.key.toLowerCase() === "k")) { e.preventDefault(); qs("#gsearch").focus(); }
       if (e.ctrlKey && e.key.toLowerCase() === "l") { e.preventDefault(); lockScreen(); }
-      const nav = NAV.find((n) => n.key === e.key);
+      if (e.key === "Escape") closeDrawer();
+      const nav = ALL_ITEMS.find((n) => n.key === e.key);
       if (nav && visible(nav)) { e.preventDefault(); J.go(nav.path); }
     });
   };
@@ -220,11 +303,12 @@
   // ------------------------------------------------------------------ başlat
   const boot = async () => {
     try { J.state.me = await J.get("auth/me"); }
-    catch (e) { if (e instanceof J.ApiError) return; const cached = localStorage.getItem("jet.me"); if (!cached) { qs("#main").innerHTML = `<div class="card p-8">Sunucuya ulaşılamıyor.</div>`; return; } J.state.me = JSON.parse(cached); J.toast("Çevrimdışı mod — son bilinen oturum", "warn"); }
+    catch (e) { if (e instanceof J.ApiError) return; const cached = localStorage.getItem("jet.me"); if (!cached) { qs("#main").innerHTML = stateBox("wifi-off", "Sunucuya ulaşılamıyor", "Yerel ağ bağlantısını kontrol edip yeniden deneyin.", `<button class="btn btn-primary mt-2" onclick="location.reload()">Yeniden dene</button>`); return; } J.state.me = JSON.parse(cached); J.toast("Çevrimdışı mod — son bilinen oturum", "warn"); }
     localStorage.setItem("jet.me", JSON.stringify(J.state.me));
     J.state.branch = J.state.me.branch;
+    setupHeader();
     J.applyPrefs(J.state.me);
-    renderNav(); setupHeader(); setupSearch(); setupNotifications(); setupKeys();
+    renderNav(); setCollapsed(collapsed(), false); setupSearch(); setupNotifications(); setupKeys();
     if (J.state.me.locked) lockScreen();
     J.connectWS();
     J.queue.flush();

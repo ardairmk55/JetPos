@@ -4,54 +4,123 @@
   const P = (J.pages = J.pages || {});
   const natural = (a, b) => a.name.localeCompare(b.name, "tr", { numeric: true });
   const STATUS = {
-    empty: ["Boş", "○"], occupied: ["Dolu", "●"], waiting: ["Sipariş bekliyor", "◔"], reserved: ["Rezerve", "◷"],
-    bill: ["Hesap bekliyor", "₺"], paid: ["Ödendi", "✓"],
+    empty: ["Boş"], occupied: ["Dolu"], waiting: ["Sipariş bekliyor"], reserved: ["Rezerve"],
+    bill: ["Hesap bekliyor"], paid: ["Ödendi"],
   };
 
   // ================================================================== DASHBOARD
   P.dashboard = async (main) => {
-    main.appendChild(J.pageHead("Ana sayfa", `${esc(J.state.me.business_name)} · ${esc(J.state.me.branch_name)}`, `<button class="btn btn-ghost btn-sm" data-r>↻ ${t("Yenile")}</button>`));
-    const grid = h(`<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4"></div>`);
-    const charts = h(`<div class="grid lg:grid-cols-2 gap-3"></div>`);
-    main.append(grid, charts);
-    const card = (label, value, sub = "", href = "", tone = "") => `<a ${href ? `href="${href}" data-link` : ""} class="card p-4 block ${href ? "hover:border-jet" : ""}"><div class="text-xs font-semibold muted uppercase tracking-wide">${esc(t(label))}</div><div class="text-2xl font-bold mt-1 tabular-nums" style="${tone}">${value}</div><div class="text-xs muted mt-1">${sub}</div></a>`;
-    const load = async () => {
-      const d = await J.get("dashboard");
-      const c = d.cards;
-      let html = "";
+    const maxDay = J.today();
+    let day = maxDay;
+    const me = J.state.me;
+    const locale = J.state.lang === "en" ? "en-GB" : "tr-TR";
+    const longDate = (d) => new Date(d + "T12:00:00").toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const head = J.pageHead("Ana Sayfa", `${esc([me.business_name, me.branch_name].filter(Boolean).join(" · "))}${me.business_name ? " · " : ""}<span data-date></span>`,
+      `<input id="dash-date" type="date" class="input" style="width:auto" max="${maxDay}" value="${day}" aria-label="Tarih">
+       <button class="btn btn-ghost" data-today type="button">Bugün</button>
+       <button class="btn btn-ghost btn-icon" data-r type="button" aria-label="Yenile" data-tip="Yenile">${J.icon("refresh-cw", 16)}</button>`);
+    const body = h(`<div class="space-y-4" aria-live="polite"></div>`);
+    main.append(head, body);
+    const skeleton = () => (body.innerHTML = `<div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">${Array(6).fill('<div class="skeleton" style="height:92px"></div>').join("")}</div><div class="grid lg:grid-cols-3 gap-3"><div class="skeleton lg:col-span-2" style="height:280px"></div><div class="skeleton" style="height:280px"></div></div>`);
+
+    const pct = (cur, base) => (base > 0 ? Math.round(((cur - base) / base) * 100) : null);
+    const delta = (cur, base, label) => {
+      const d = pct(cur, base);
+      if (d === null) return `<span class="faint">${esc(label)}: —</span>`;
+      const up = d >= 0;
+      return `<span class="delta ${up ? "up" : "down"}">${J.icon(up ? "arrow-up" : "arrow-down", 12)}${Math.abs(d)}%</span> <span class="faint">${esc(label)}</span>`;
+    };
+    const stat = (label, icon, value, sub = "", href = "", cls = "") => `<${href ? `a href="${href}" data-link` : "div"} class="card stat ${cls}"><div class="stat-label">${J.icon(icon, 16)}${esc(t(label))}</div><div class="stat-value">${value}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ""}</${href ? "a" : "div"}>`;
+    const panel = (title, content, link = "", linkLabel = "Tümü") => `<section class="card" style="min-width:0"><header class="flex items-center gap-2 px-4 py-3 border-b bd"><h2 class="h2 flex-1">${esc(t(title))}</h2>${link ? `<a href="${link}" data-link class="btn btn-quiet btn-sm">${esc(t(linkLabel))}${J.icon("chevron-right", 14)}</a>` : ""}</header>${content}</section>`;
+    const none = (icon, title, text) => J.empty(icon, title, text);
+    const hasSales = (c) => c.sales_today && (c.sales_today.value > 0 || c.tickets_today.value > 0);
+
+    const render = (d) => {
+      const c = d.cards, L = d.lists || {};
+      const isToday = d.date === d.today;
+      qs("[data-date]", head).textContent = longDate(d.date) + (isToday ? "" : " (geçmiş gün)");
+      const out = [];
+
+      // Dikkat gerektirenler: yalnızca varsa gösterilir
+      const alerts = [];
+      if (c.approvals?.value) alerts.push(["circle-check", `${c.approvals.value} onay bekliyor`, "/approvals"]);
+      if (c.bill_requested?.value) alerts.push(["receipt", `${c.bill_requested.value} masa hesap istiyor`, "/floor"]);
+      if (c.kitchen_pending?.late) alerts.push(["flame", `${c.kitchen_pending.late} geciken mutfak siparişi`, J.can("kds.view") ? "/kds" : "/ready"]);
+      if (c.low_stock?.value) alerts.push(["package", `${c.low_stock.value} kalemde stok kritik`, "/stock"]);
+      if (c.cash && c.cash.status === "closed") alerts.push(["wallet", "Kasa kapalı: ödeme almak için açın", "/cash"]);
+      if (alerts.length) out.push(`<div class="flex flex-wrap gap-2" role="list" aria-label="Dikkat gerektirenler">${alerts.map(([ic, tx, href]) => `<a href="${href}" data-link role="listitem" class="chip" style="border-color:var(--warn);background:var(--warn-soft);color:var(--text)"><span style="color:var(--warn)">${J.icon(ic, 16)}</span>${esc(tx)}</a>`).join("")}</div>`);
+
+      // Özet kartları
+      const stats = [];
       if (c.sales_today) {
-        const diff = c.sales_today.prev ? Math.round(((c.sales_today.value - c.sales_today.prev) / c.sales_today.prev) * 100) : null;
-        html += card("Bugünkü ciro", money(c.sales_today.value), diff === null ? "Dün: —" : `Dün: ${money(c.sales_today.prev)} (${diff >= 0 ? "+" : ""}${diff}%)`, "/reports");
-        html += card("Adisyon", c.tickets_today.value, `Ortalama ${money(c.avg_ticket.value)}`, "/tickets");
+        const s = c.sales_today;
+        stats.push(stat("Günlük ciro", "banknote", J.money(s.value), `${delta(s.value, s.prev, "dün")} · ${delta(s.value, s.last_week, "geçen hafta")}`, "/reports", "primary col-span-2"));
+        stats.push(stat("Sipariş sayısı", "receipt", J.num(c.tickets_today.value, 0), `Ortalama adisyon ${J.money(c.avg_ticket.value)}`, "/tickets"));
       }
-      if (c.open_tickets) html += card("Açık adisyon", c.open_tickets.value, `${money(c.open_tickets.amount)} · ${c.bill_requested.value} hesap bekliyor`, "/floor");
-      if (c.kitchen_pending) html += card("Mutfakta bekleyen", c.kitchen_pending.value, `${c.kitchen_pending.late} geciken · ${c.ready_orders.value} hazır`, J.can("kds.view") ? "/kds" : "/ready", c.kitchen_pending.late ? "color:var(--bad)" : "");
-      if (c.cash) html += card("Kasa", c.cash.status === "open" ? "Açık" : c.cash.status === "pending_approval" ? "Onay bekliyor" : "Kapalı", c.cash.expected !== null ? `Beklenen nakit ${money(c.cash.expected)}` : "Gün başı açılış gerekli", "/cash");
-      if (c.low_stock) html += card("Düşük stok", c.low_stock.value, "kalem minimum seviyede", "/stock", c.low_stock.value ? "color:var(--warn)" : "");
-      if (c.approvals) html += card("Onay bekleyen", c.approvals.value, "indirim / iptal / iade", "/approvals", c.approvals.value ? "color:var(--accent)" : "");
-      grid.innerHTML = html || card("Hoş geldiniz", esc(J.state.me.first_name || J.state.me.username), esc(J.state.me.role_label));
-      charts.innerHTML = "";
-      const titles = { week: "Son 7 gün ciro", hourly: "Bugün saatlik yoğunluk", top_products: "Bugün en çok satanlar", payments: "Bugün ödeme dağılımı" };
-      Object.entries(d.charts).forEach(([k, spec]) => {
-        const box = h(`<section class="card p-4"><h2 class="font-semibold mb-3">${esc(t(titles[k] || k))}</h2><div data-c></div></section>`);
-        charts.appendChild(box);
-        requestAnimationFrame(() => J.chart(box.querySelector("[data-c]"), spec));
+      if (c.open_tickets) stats.push(stat("Açık adisyon", "layout-grid", J.num(c.open_tickets.value, 0), `Toplam ${J.money(c.open_tickets.amount)}`, "/floor"));
+      if (c.active_tables) stats.push(stat("Aktif masa", "utensils", `${c.active_tables.value}<span class="faint" style="font-size:1rem;font-weight:500"> / ${c.active_tables.total}</span>`, "Anlık doluluk", "/floor"));
+      if (c.payments_cash) stats.push(stat("Nakit tahsilat", "coins", J.money(c.payments_cash.value), "", "/payments"));
+      if (c.payments_card) stats.push(stat("Kart tahsilatı", "credit-card", J.money(c.payments_card.value), "", "/payments"));
+      if (c.kitchen_pending && !c.sales_today) { stats.push(stat("Mutfakta bekleyen", "chef-hat", c.kitchen_pending.value, `${c.kitchen_pending.late} geciken`, "/kds")); stats.push(stat("Hazır sipariş", "bell-ring", c.ready_orders.value, "", "/ready")); }
+      if (c.cash && !c.sales_today) stats.push(stat("Kasa", "wallet", c.cash.status === "open" ? "Açık" : c.cash.status === "pending_approval" ? "Onay bekliyor" : "Kapalı", c.cash.expected !== null ? `Beklenen nakit ${J.money(c.cash.expected)}` : "", "/cash"));
+      if (stats.length) out.push(`<div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">${stats.join("")}</div>`);
+
+      // Grafikler
+      if (c.sales_today) {
+        const s = c.sales_today, ch = d.charts;
+        const sales = hasSales(c);
+        const cmp = [["Seçilen gün", s.value], ["Önceki gün", s.prev], ["Geçen hafta aynı gün", s.last_week]];
+        const cmax = Math.max(...cmp.map((x) => x[1]), 1);
+        out.push(`<div class="grid lg:grid-cols-3 gap-3">
+          <div class="lg:col-span-2">${panel("Son 7 gün satış", `<div class="p-4" data-c="week">${sales || ch.week.series[0].data.some((v) => v > 0) ? "" : none("chart-column", "Bu dönemde satış yok", "Kapanan adisyonlar burada günlük ciro olarak görünür.")}</div>`, "/reports", "Raporlar")}</div>
+          ${panel("Satış karşılaştırması", `<div class="p-4 space-y-4">${cmp.map(([l, v], i) => `<div><div class="flex items-baseline justify-between mb-1 text-sm"><span class="${i ? "muted" : "font-medium"}">${esc(t(l))}</span><b class="tnum">${J.money(v)}</b></div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(v / cmax * 100, v > 0 ? 2 : 0)}%;${i ? "background:var(--chart-5)" : ""}"></div></div></div>`).join("")}<p class="hint">Seçilen günün cirosu; önceki gün ve geçen haftanın aynı günüyle.</p></div>`)}
+        </div>
+        <div class="grid lg:grid-cols-3 gap-3">
+          ${panel("Ödeme dağılımı", ch.payments.labels.length ? `<div class="p-4" data-c="payments"></div>` : none("credit-card", "Tahsilat yok", "Ödemeler yöntemlerine göre burada gruplanır."), "/payments")}
+          <div class="lg:col-span-2">${panel("En çok satan ürünler", ch.top_products.labels.length ? `<div class="p-4 space-y-3">${ch.top_products.labels.map((n, i) => { const v = ch.top_products.series[0].data[i]; const mx = ch.top_products.series[0].data[0] || 1; return `<div><div class="flex items-baseline justify-between text-sm mb-1"><span class="truncate pr-3"><span class="faint tnum" style="display:inline-block;width:1.25rem">${i + 1}</span>${esc(n)}</span><b class="tnum">${J.num(v, 0)} adet</b></div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(v / mx * 100, 2)}%"></div></div></div>`; }).join("")}</div>` : none("utensils", "Satılan ürün yok", "Mutfağa gönderilen ürünler satış adedine göre sıralanır."), "/reports", "Raporlar")}</div>
+        </div>`);
+      }
+
+      // Operasyon panelleri (anlık)
+      const ops = [];
+      if (L.open_tables) ops.push(panel("Açık masalar", L.open_tables.length ? L.open_tables.map((r) => `<a href="/ticket/${r.id}" data-link class="list-row" style="color:inherit"><span class="dot st-${r.status === "bill_requested" ? "bill" : r.status === "paid" ? "paid" : "occupied"}" aria-hidden="true"></span><span class="flex-1 min-w-0"><b class="font-medium">${esc(r.table)}</b><span class="block text-xs muted truncate">${esc(r.waiter)} · ${r.minutes} dk${r.status === "bill_requested" ? " · hesap istedi" : ""}</span></span><b class="tnum">${J.money(r.total)}</b></a>`).join("") : none("layout-grid", "Açık masa yok", "Masa açıldığında burada görünür."), "/floor"));
+      if (L.kitchen) ops.push(panel("Bekleyen siparişler", L.kitchen.length ? L.kitchen.map((r) => `<div class="list-row"><span class="flex-1 min-w-0"><b class="font-medium">${esc(r.table)}</b><span class="block text-xs muted truncate">${esc(r.station)}</span></span>${r.late ? J.badge(`${r.minutes} dk`, "var(--bad)", "flame") : `<span class="tnum muted">${r.minutes} dk</span>`}</div>`).join("") : none("chef-hat", "Bekleyen sipariş yok", "Mutfağa gönderilen siparişler burada izlenir."), J.can("kds.view") ? "/kds" : ""));
+      if (L.ready) ops.push(panel("Hazır siparişler", L.ready.length ? L.ready.map((r) => `<a href="/ticket/${r.ticket}" data-link class="list-row" style="color:inherit"><span class="flex-1"><b class="font-medium">${esc(r.table)}</b></span><span class="tnum muted">${r.minutes} dk önce</span>${J.icon("chevron-right", 14)}</a>`).join("") : none("bell-ring", "Hazır sipariş yok", "Mutfak hazırladığında teslim bekleyenler listelenir."), "/ready"));
+      if (L.low_stock) ops.push(panel("Kritik stok", L.low_stock.length ? L.low_stock.map((r) => `<div class="list-row"><span class="flex-1 min-w-0"><b class="font-medium">${esc(r.name)}</b><span class="block text-xs muted">Min. ${J.num(r.min, 2)} ${esc(r.unit)}</span></span>${r.qty <= 0 ? J.badge("Tükendi", "var(--bad)") : J.badge(`${J.num(r.qty, 2)} ${r.unit}`, "var(--warn)")}</div>`).join("") : none("package", "Kritik stok yok", "Minimum seviyenin altına düşen malzemeler burada uyarılır."), "/stock"));
+      if (ops.length) out.push(`<div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3">${ops.join("")}</div>`);
+
+      if (!out.length) out.push(`<div class="card">${none("layout-dashboard", `Hoş geldiniz, ${esc(me.first_name || me.username)}`, "Rolünüze uygun ekranlara soldaki menüden ulaşabilirsiniz.")}</div>`);
+      body.innerHTML = out.join("");
+      requestAnimationFrame(() => {
+        const w = qs('[data-c="week"]', body); if (w && !w.firstElementChild) J.chart(w, d.charts.week, { height: 240 });
+        const pm = qs('[data-c="payments"]', body); if (pm) J.chart(pm, d.charts.payments, { height: 180 });
       });
     };
-    qs("[data-r]", main).onclick = () => load().catch(J.err);
+    let busy = false;
+    const load = async () => {
+      if (busy) return; busy = true;
+      try { render(await J.get(`dashboard?date=${day}`)); }
+      catch (e) { body.innerHTML = `<div class="card">${J.empty("triangle-alert", "Özet yüklenemedi", e?.data?.detail || "Bağlantıyı kontrol edip yeniden deneyin.", '<button class="btn btn-primary mt-2" data-retry>Yeniden dene</button>')}</div>`; qs("[data-retry]", body)?.addEventListener("click", load); }
+      finally { busy = false; }
+    };
+    qs("#dash-date", head).onchange = (e) => { day = e.target.value && e.target.value <= maxDay ? e.target.value : maxDay; e.target.value = day; skeleton(); load(); };
+    qs("[data-today]", head).onclick = () => { day = maxDay; qs("#dash-date", head).value = day; skeleton(); load(); };
+    qs("[data-r]", head).onclick = load;
+    skeleton();
     await load();
-    const off = J.on("ws:table", J.debounce(() => load().catch(() => {}), 1500));
-    return off;
+    const live = J.debounce(() => day === maxDay && load(), 1500);
+    const offs = [J.on("ws:table", live), J.on("ws:kitchen", live), J.on("ws:ready", live), J.on("theme", () => load())];
+    return () => offs.forEach((f) => f());
   };
 
   // ================================================================== MASALAR
   P.floor = async (main) => {
     const head = J.pageHead("Masalar", "", `
-      ${J.can("ticket.open") ? `<button class="btn btn-ghost btn-sm" data-takeaway>+ Gel-al</button>` : ""}
-      <button class="btn btn-ghost btn-sm" data-view>▦ Plan</button>
-      ${J.can("floor.manage") ? `<button class="btn btn-ghost btn-sm" data-edit>✎ Düzenle</button><button class="btn btn-ghost btn-sm" data-addhall>+ Salon</button><button class="btn btn-ghost btn-sm" data-addtable>+ Masa</button>` : ""}`);
+      ${J.can("ticket.open") ? `<button class="btn btn-ghost" data-takeaway>${J.icon("shopping-bag", 16)}Gel-al</button>` : ""}
+      <button class="btn btn-ghost" data-view>${J.icon("layout-grid", 16)}<span data-view-label>Plan görünümü</span></button>
+      ${J.can("floor.manage") ? `<button class="btn btn-ghost" data-edit>${J.icon("pencil", 16)}Yerleşimi düzenle</button><button class="btn btn-ghost" data-addhall>${J.icon("plus", 16)}Salon</button><button class="btn btn-ghost" data-addtable>${J.icon("plus", 16)}Masa</button>` : ""}`);
     main.appendChild(head);
-    const legend = h(`<div class="flex flex-wrap gap-3 text-xs mb-3">${Object.entries(STATUS).map(([k, [l, i]]) => `<span class="st-${k} inline-flex items-center gap-1"><span class="dot"></span>${i} ${esc(t(l))} <b data-n="${k}"></b></span>`).join("")}</div>`);
+    const legend = h(`<div class="flex flex-wrap gap-x-4 gap-y-1 text-sm mb-3">${Object.entries(STATUS).map(([k, [l]]) => `<span class="st-${k} inline-flex items-center gap-1.5 muted"><span class="dot"></span>${esc(t(l))} <b data-n="${k}" class="tnum" style="color:var(--text)"></b></span>`).join("")}</div>`);
     const halls = h(`<div class="flex gap-2 overflow-x-auto pb-2 mb-2" role="tablist"></div>`);
     const qr = h(`<div></div>`);
     const area = h(`<div></div>`);
@@ -93,11 +162,11 @@
       acts.forEach((a) => { const b = h(`<button class="btn btn-ghost btn-lg w-full">${esc(t(a.label))}</button>`); b.onclick = async () => { m.close(); try { await a.run(); } catch (e) { J.err(e); } }; body.appendChild(b); });
     };
     const cardHtml = (tb) => {
-      const [label, icon] = STATUS[tb.status];
+      const [label] = STATUS[tb.status];
       const tk = tb.ticket;
-      return `<div class="flex items-start gap-2"><div class="text-xl font-black flex-1">${esc(tb.name)}</div>${tk?.ready ? `<span class="badge pulse" style="background:var(--accent);color:var(--accent-ink)">🔔 ${t("Hazır")} ${tk.ready}</span>` : ""}<span role="button" tabindex="0" class="muted px-2 -mr-1 rounded hover:surface-2" data-menu aria-label="Masa işlemleri">⋯</span></div>
-        <div class="text-xs font-semibold mt-1" style="color:var(--st)">${icon} ${esc(t(label))}${tb.merged_into ? " · birleşik" : ""}</div>
-        ${tk ? `<div class="mt-auto pt-2"><div class="text-lg font-bold tabular-nums">${money(tk.total)}</div><div class="text-xs muted truncate">${esc(tk.waiter)} · ${tk.items} ürün · ${tk.minutes} dk${tk.drafts ? ` · ${tk.drafts} taslak` : ""}</div></div>` : `<div class="mt-auto text-xs muted">${tb.seats} kişilik</div>`}`;
+      return `<div class="flex items-start gap-2"><div class="text-lg font-semibold flex-1 tnum">${esc(tb.name)}</div>${tk?.ready ? `<span class="badge pulse" style="background:var(--accent);color:var(--accent-ink)">${J.icon("bell-ring", 12)}${t("Hazır")} ${tk.ready}</span>` : ""}<span role="button" tabindex="0" class="muted rounded" style="padding:2px;margin:-2px -4px 0 0" data-menu aria-label="Masa işlemleri">${J.icon("ellipsis", 18)}</span></div>
+        <div class="st-text"><span class="dot"></span>${esc(t(label))}${tb.merged_into ? " · birleşik" : ""}</div>
+        ${tk ? `<div class="mt-auto pt-2"><div class="text-lg font-semibold tnum">${money(tk.total)}</div><div class="text-xs muted truncate">${esc(tk.waiter)} · ${tk.items} ürün · ${tk.minutes} dk${tk.drafts ? ` · ${tk.drafts} taslak` : ""}</div></div>` : `<div class="mt-auto text-xs faint">${tb.seats} kişilik</div>`}`;
     };
     const render = () => {
       halls.innerHTML = "";
@@ -109,15 +178,16 @@
         halls.appendChild(b);
       });
       Object.keys(STATUS).forEach((k) => (qs(`[data-n="${k}"]`, legend).textContent = data.summary[k] || 0));
+      const vl = qs("[data-view-label]", head); if (vl) vl.textContent = plan ? "Liste görünümü" : "Plan görünümü";
       const tables = data.tables.filter((x) => x.hall === hall).sort(natural);
       area.innerHTML = "";
-      if (!data.halls.length) { area.innerHTML = `<div class="card p-8 text-center muted">Salon tanımlı değil. ${J.can("floor.manage") ? "“+ Salon” ile ekleyin." : ""}</div>`; return; }
+      if (!data.halls.length) { area.innerHTML = `<div class="card">${J.empty("layout-grid", "Salon tanımlı değil", J.can("floor.manage") ? "Başlamak için “Salon” düğmesiyle bir salon ekleyin." : "Yöneticinizden salon tanımlamasını isteyin.")}</div>`; return; }
       if (plan) {
         const hh = data.halls.find((x) => x.id === hall);
-        const canvas = h(`<div class="relative card overflow-auto" style="height:min(75vh, ${hh.height}px)"><div class="relative" style="width:${hh.width}px;height:${hh.height}px"></div></div>`);
+        const canvas = h(`<div class="relative card overflow-auto" style="height:min(72vh, ${hh.height}px);background-image:radial-gradient(var(--border) 1px, transparent 1px);background-size:20px 20px"><div class="relative" style="width:${hh.width}px;height:${hh.height}px"></div></div>`);
         const inner = canvas.firstElementChild;
         tables.forEach((tb) => {
-          const el = h(`<button class="tile table-card st-${tb.status} p-3 absolute ${tb.id === focusTable ? "ring-4" : ""}" style="left:${tb.x}px;top:${tb.y}px;width:${tb.w}px;height:${tb.h}px;${tb.shape === "round" ? "border-radius:999px" : ""}" aria-label="Masa ${esc(tb.name)} ${esc(t(STATUS[tb.status][0]))}">${cardHtml(tb)}</button>`);
+          const el = h(`<button class="tile table-card st-${tb.status} absolute ${tb.id === focusTable ? "ring-2" : ""}" data-st="${tb.status}" style="left:${tb.x}px;top:${tb.y}px;width:${tb.w}px;height:${tb.h}px;${tb.shape === "round" ? "border-radius:999px" : ""}" aria-label="Masa ${esc(tb.name)} ${esc(t(STATUS[tb.status][0]))}">${cardHtml(tb)}</button>`);
           el.onclick = (e) => { if (e.target.closest("[data-menu]")) return tableMenu(tb); openTable(tb); };
           if (editing) {
             el.style.cursor = "move";
@@ -140,14 +210,14 @@
       } else {
         const grid = h(`<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3"></div>`);
         tables.forEach((tb) => {
-          const el = h(`<button class="tile table-card st-${tb.status} p-3 min-h-[128px] ${tb.id === focusTable ? "ring-4" : ""}" aria-label="Masa ${esc(tb.name)} ${esc(t(STATUS[tb.status][0]))}">${cardHtml(tb)}</button>`);
+          const el = h(`<button class="tile table-card st-${tb.status} min-h-[120px] ${tb.id === focusTable ? "ring-2" : ""}" data-st="${tb.status}" aria-label="Masa ${esc(tb.name)} ${esc(t(STATUS[tb.status][0]))}">${cardHtml(tb)}</button>`);
           el.onclick = (e) => { if (e.target.closest("[data-menu]")) return tableMenu(tb); openTable(tb); };
           el.oncontextmenu = (e) => { e.preventDefault(); tableMenu(tb); };
           grid.appendChild(el);
         });
         area.appendChild(grid);
       }
-      others.innerHTML = data.other_tickets.length ? `<h2 class="font-semibold mb-2">Masasız adisyonlar (gel-al / teslimat / QR)</h2>` : "";
+      others.innerHTML = data.other_tickets.length ? `<h2 class="h2 mb-2">Masasız adisyonlar <span class="muted" style="font-weight:400">(gel-al, teslimat, QR)</span></h2>` : "";
       if (data.other_tickets.length) others.appendChild(J.table([
         { key: "number", label: "No", fmt: (v) => "#" + v }, { key: "channel", label: "Kanal" }, { key: "status_label", label: "Durum" },
         { key: "waiter_name", label: "Personel" }, { key: "total", label: "Toplam", right: true, fmt: money }], data.other_tickets, { onRow: (r) => J.go(`/ticket/${r.id}`) }));
@@ -157,7 +227,7 @@
       const list = await J.get("qr-orders").catch(() => []);
       qr.innerHTML = "";
       if (!list.length) return;
-      const box = h(`<div class="card p-3 mb-3" style="border-color:var(--accent)"><h2 class="font-semibold mb-2">📱 QR siparişleri onay bekliyor (${list.length})</h2></div>`);
+      const box = h(`<div class="card p-3 mb-3" style="border-color:var(--accent)"><h2 class="h2 mb-2 flex items-center gap-2">${J.icon("qr-code", 16)}QR siparişleri onay bekliyor (${list.length})</h2></div>`);
       list.forEach((o) => {
         const row = h(`<div class="flex flex-wrap items-center gap-2 py-2 border-t bd"><b>Masa ${esc(o.table_name)}</b><span class="flex-1 text-sm">${o.items.map((i) => `${esc(i.qty)} × ${esc(i.name)}`).join(", ")}</span><button class="btn btn-ok btn-sm">Adisyona ekle</button><button class="btn btn-ghost btn-sm">Reddet</button></div>`);
         const [ok, no] = row.querySelectorAll("button");
@@ -190,18 +260,18 @@
 
   // ================================================================== ADİSYON
   P.ticket = async (main, { id }) => {
-    main.classList.add("!p-0");
-    const layout = h(`<div class="flex flex-col lg:flex-row h-[calc(100vh-4rem)]">
+    main.classList.add("page-bleed");
+    const layout = h(`<div class="flex flex-col lg:flex-row" style="height:calc(100vh - 56px);height:calc(100dvh - 56px)">
       <section class="flex-1 min-w-0 flex flex-col" data-menu-col>
         <div class="flex items-center gap-2 p-3 border-b bd" style="background:var(--surface)">
-          <button class="btn btn-ghost btn-sm" data-back aria-label="Masalara dön">←</button>
-          <input class="input" type="search" placeholder="Ürün ara (adı, kodu, barkod)…" data-search aria-label="Ürün ara">
-          <button class="btn btn-ghost btn-sm lg:hidden" data-show-ticket>Adisyon</button>
+          <button class="btn btn-ghost btn-icon" data-back aria-label="Masalara dön" type="button">${J.icon("arrow-left", 18)}</button>
+          <div class="relative flex-1"><span class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none faint">${J.icon("search", 16)}</span><input class="input" style="padding-left:2.25rem" type="search" placeholder="Ürün ara: ad, kod veya barkod" data-search aria-label="Ürün ara"></div>
+          <button class="btn btn-dark lg:hidden" data-show-ticket type="button">${J.icon("receipt", 16)}Adisyon</button>
         </div>
-        <div class="flex gap-2 overflow-x-auto p-3 pb-1" data-cats role="tablist" aria-label="Kategoriler"></div>
+        <div class="flex gap-2 overflow-x-auto px-3 pt-3 pb-1" data-cats role="tablist" aria-label="Kategoriler"></div>
         <div class="flex-1 overflow-y-auto p-3"><div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2" data-products></div></div>
       </section>
-      <aside class="w-full lg:w-[420px] xl:w-[460px] border-l bd flex flex-col hidden lg:flex" style="background:var(--surface)" data-ticket-col aria-label="Adisyon"></aside>
+      <aside class="w-full lg:w-[400px] xl:w-[440px] border-l bd flex flex-col hidden lg:flex" style="background:var(--surface)" data-ticket-col aria-label="Adisyon"></aside>
     </div>`);
     main.appendChild(layout);
     const tcol = qs("[data-ticket-col]", layout);
@@ -220,9 +290,9 @@
     };
     const renderCats = () => {
       const c = qs("[data-cats]", layout);
-      const items = [["fav", "★ Favoriler"], ["recent", "⟲ Son kullanılan"], ["popular", "🔥 Popüler"], ...menu.cats.map((x) => [x.id, x.name])];
+      const items = [["fav", "Favoriler", "star"], ["recent", "Son kullanılan", "history"], ["popular", "Popüler", "flame"], ...menu.cats.map((x) => [x.id, x.name])];
       c.innerHTML = "";
-      items.forEach(([k, l]) => { const b = h(`<button class="chip ${cat === k ? "active" : ""}" role="tab">${esc(l)}</button>`); b.onclick = () => { cat = k; renderCats(); renderProducts(); }; c.appendChild(b); });
+      items.forEach(([k, l, ic]) => { const b = h(`<button class="chip ${cat === k ? "active" : ""}" role="tab" aria-selected="${cat === k}">${ic ? J.icon(ic, 14) : ""}${esc(l)}</button>`); b.onclick = () => { cat = k; renderCats(); renderProducts(); }; c.appendChild(b); });
     };
     const renderProducts = () => {
       const g = qs("[data-products]", layout);
@@ -232,12 +302,12 @@
       else if (cat === "recent") list = menu.recent.map((i) => menu.products.find((p) => p.id === i)).filter(Boolean);
       else if (cat === "popular") list = menu.popular.map((i) => menu.products.find((p) => p.id === i)).filter(Boolean);
       else list = list.filter((p) => p.category === cat);
-      g.innerHTML = list.length ? "" : `<div class="col-span-full p-8 text-center muted">Ürün yok${cat === "fav" ? " — kategorilerden seçin" : ""}</div>`;
+      g.innerHTML = list.length ? "" : `<div class="col-span-full">${J.empty("utensils", search ? "Eşleşen ürün yok" : "Bu bölümde ürün yok", cat === "fav" ? "Favori ürünler burada görünür. Kategorilerden seçim yapabilirsiniz." : "Farklı bir kategori veya arama deneyin.")}</div>`;
       list.forEach((p) => {
-        const st = p.stock_state === "out" ? `<span class="badge" style="background:var(--bad);color:#fff">Stok yok</span>` : p.stock_state === "low" ? `<span class="badge" style="background:var(--warn);color:#fff">Az</span>` : "";
-        const tile = h(`<button class="tile" aria-label="${esc(p.name)} ${money(p.price)}">
-          <div class="h-16 surface-2 flex items-center justify-center text-2xl overflow-hidden">${p.image_url ? `<img src="${esc(p.image_url)}" alt="" class="w-full h-full object-cover" loading="lazy">` : "🍽"}</div>
-          <div class="p-2 flex-1 flex flex-col"><div class="text-sm font-semibold leading-tight line-clamp-2">${esc(p.name)}</div><div class="mt-auto flex items-center justify-between pt-1"><b class="tabular-nums text-sm">${money(p.price)}</b>${st}</div></div></button>`);
+        const st = p.stock_state === "out" ? J.badge("Stok yok", "var(--bad)") : p.stock_state === "low" ? J.badge("Az kaldı", "var(--warn)") : "";
+        const tile = h(`<button class="tile" style="min-height:84px" aria-label="${esc(p.name)} ${money(p.price)}">
+          ${p.image_url ? `<img src="${esc(p.image_url)}" alt="" class="w-full object-cover" style="height:56px" loading="lazy">` : ""}
+          <div class="p-3 flex-1 flex flex-col gap-1"><div class="text-sm font-medium leading-tight line-clamp-2">${esc(p.name)}</div><div class="mt-auto flex items-center justify-between gap-1"><b class="tnum text-sm">${money(p.price)}</b>${st}</div></div></button>`);
         tile.onclick = () => addProduct(p);
         g.appendChild(tile);
       });
@@ -323,25 +393,25 @@
           <div class="flex-1 min-w-0"><div class="font-semibold ${isVoid ? "line-through" : ""}">${esc(J.num(ln.qty, 2))} × ${esc(ln.name)}</div>
           ${ln.options.length ? `<div class="text-xs muted">${ln.options.map((o) => esc(o.name)).join(", ")}</div>` : ""}
           ${ln.note ? `<div class="text-xs" style="color:var(--warn)">Not: ${esc(ln.note)}</div>` : ""}
-          ${ln.campaign_name ? `<div class="text-xs" style="color:var(--ok)">🏷 ${esc(ln.campaign_name)} −${money(ln.campaign_discount)}</div>` : ""}
+          ${ln.campaign_name ? `<div class="text-xs flex items-center gap-1" style="color:var(--ok)">${J.icon("tag", 12)}${esc(ln.campaign_name)} −${money(ln.campaign_discount)}</div>` : ""}
           ${isVoid ? `<div class="text-xs" style="color:var(--bad)">İptal: ${esc(ln.void_reason)}</div>` : ""}
-          <div class="text-xs mt-0.5">${ln._queued ? J.badge("⏳ Kuyrukta — sunucuya ulaşmadı", "var(--warn)") : isDraft ? J.badge(t("Taslak"), "var(--muted)") : isVoid ? "" : J.badge(`${t("Gönderildi")} · P${ln.batch_number || ""}`, "var(--info)")}${ln.paid ? " " + J.badge("Ödendi", "var(--ok)") : ""}${ln.seat ? ` <span class="muted">Kişi ${ln.seat}</span>` : ""}</div></div>
+          <div class="text-xs mt-0.5">${ln._queued ? J.badge("Kuyrukta, sunucuya ulaşmadı", "var(--warn)", "clock") : isDraft ? J.badge(t("Taslak"), "var(--muted)") : isVoid ? "" : J.badge(`${t("Gönderildi")} · P${ln.batch_number || ""}`, "var(--info)")}${ln.paid ? " " + J.badge("Ödendi", "var(--ok)") : ""}${ln.seat ? ` <span class="muted">Kişi ${ln.seat}</span>` : ""}</div></div>
           <div class="text-right"><div class="font-bold tabular-nums">${money(ln.unit_price * ln.qty)}</div></div>
         </div>
         <div class="flex gap-1 mt-1 justify-end" data-acts></div></div>`);
       const acts = qs("[data-acts]", el);
-      const btn = (label, fn, cls = "btn-ghost") => { const b = h(`<button class="btn ${cls} btn-sm">${label}</button>`); b.onclick = () => fn().catch(J.err); acts.appendChild(b); };
+      const btn = (label, fn, cls = "btn-ghost", name = "") => { const b = h(`<button class="btn ${cls} btn-sm" type="button" ${/^<svg/.test(label) ? `aria-label="${esc(name || "İşlem")}"` : ""}>${label}</button>`); b.onclick = () => fn().catch(J.err); acts.appendChild(b); };
       if (ln._queued) return el;
       if (isDraft && tk.status !== "paid") {
-        btn("−", async () => { tk = ln.qty > 1 ? await J.post(`tickets/${id}/update_line`, { line: ln.id, qty: Number(ln.qty) - 1 }) : await J.post(`tickets/${id}/delete_line`, { line: ln.id }); renderTicket(); });
-        btn("+", async () => { tk = await J.post(`tickets/${id}/update_line`, { line: ln.id, qty: Number(ln.qty) + 1 }); renderTicket(); });
-        btn("✎", async () => {
+        btn(J.icon("minus", 16), async () => { tk = ln.qty > 1 ? await J.post(`tickets/${id}/update_line`, { line: ln.id, qty: Number(ln.qty) - 1 }) : await J.post(`tickets/${id}/delete_line`, { line: ln.id }); renderTicket(); }, "btn-ghost", "Azalt");
+        btn(J.icon("plus", 16), async () => { tk = await J.post(`tickets/${id}/update_line`, { line: ln.id, qty: Number(ln.qty) + 1 }); renderTicket(); }, "btn-ghost", "Artır");
+        btn(J.icon("pencil", 14), async () => {
           const p = menu.products.find((x) => x.id === ln.product);
           if (p?.option_groups_detail?.length) return optionsModal(p, ln);
           const v = await J.promptForm("Satırı düzenle", [{ name: "qty", label: "Miktar", type: "number", step: "0.5", default: ln.qty }, { name: "note", label: "Not", default: ln.note }]);
           if (v) { tk = await J.post(`tickets/${id}/update_line`, { line: ln.id, ...v }); renderTicket(); }
-        });
-        btn("🗑", async () => { tk = await J.post(`tickets/${id}/delete_line`, { line: ln.id }); renderTicket(); });
+        }, "btn-ghost", "Düzenle");
+        btn(J.icon("trash-2", 14), async () => { tk = await J.post(`tickets/${id}/delete_line`, { line: ln.id }); renderTicket(); }, "btn-ghost", "Satırı sil");
       }
       if (ln.status === "sent" && !ln.paid && ["open", "bill_requested"].includes(tk.status)) {
         btn("Kişi", async () => { const v = await J.promptForm("Ürün bazlı kişi ataması", [{ name: "seat", label: "Kişi no (hesap bölme için)", type: "number", default: ln.seat || 1 }]); if (v) { tk = await J.post(`tickets/${id}/update_line`, { line: ln.id, seat: Number(v.seat) || null }); renderTicket(); } });
@@ -367,16 +437,16 @@
       const st = tk.status;
       tcol.innerHTML = "";
       tcol.appendChild(h(`<div class="p-3 border-b bd flex items-start gap-2">
-        <button class="btn btn-ghost btn-sm lg:hidden" data-back2>←</button>
-        <div class="flex-1"><div class="text-lg font-black">${tk.table_name ? "Masa " + esc(tk.table_name) : esc(tk.channel === "takeaway" ? "Gel-al" : tk.channel === "delivery" ? "Teslimat" : tk.channel)} <span class="muted font-semibold">#${tk.number}</span></div>
-        <div class="text-xs muted">${esc(tk.waiter_name)} · ${J.dt(tk.opened_at)} · ${esc(tk.status_label)}${tk.customer_name ? " · 👤 " + esc(tk.customer_name) : ""}${tk.customer_group_name ? " · " + esc(tk.customer_group_name) : ""}</div></div>
-        <button class="btn btn-ghost btn-sm" data-more aria-label="Diğer işlemler">⋯</button></div>`));
+        <button class="btn btn-ghost btn-icon lg:hidden" data-back2 type="button" aria-label="Ürünlere dön">${J.icon("arrow-left", 18)}</button>
+        <div class="flex-1"><div class="text-lg font-semibold">${tk.table_name ? "Masa " + esc(tk.table_name) : esc(tk.channel === "takeaway" ? "Gel-al" : tk.channel === "delivery" ? "Teslimat" : tk.channel)} <span class="muted" style="font-weight:400">#${tk.number}</span></div>
+        <div class="text-xs muted">${esc(tk.waiter_name)} · ${J.dt(tk.opened_at)} · ${esc(tk.status_label)}${tk.customer_name ? " · " + esc(tk.customer_name) : ""}${tk.customer_group_name ? " · " + esc(tk.customer_group_name) : ""}</div></div>
+        <button class="btn btn-ghost btn-icon" data-more aria-label="Diğer işlemler" type="button">${J.icon("ellipsis", 18)}</button></div>`));
       qs("[data-back2]", tcol).onclick = () => { tcol.classList.add("hidden"); mcol.classList.remove("hidden"); };
-      if (sendQueued) tcol.appendChild(h(`<div class="p-3 text-sm font-semibold" style="background:var(--warn);color:#fff" role="alert">⏳ Mutfağa gönderim kuyrukta. Bağlantı gelince gönderilecek — mutfağa HENÜZ ulaşmadı.</div>`));
-      if (tk.pending_approvals?.length) tcol.appendChild(h(`<div class="px-3 py-2 text-xs" style="background:color-mix(in srgb,var(--accent) 18%,transparent)">⏳ ${tk.pending_approvals.length} onay bekleyen talep</div>`));
+      if (sendQueued) tcol.appendChild(h(`<div class="p-3 text-sm font-medium flex gap-2" style="background:var(--warn-soft);color:var(--warn)" role="alert">${J.icon("clock", 18)}<span>Mutfağa gönderim kuyrukta. Bağlantı gelince gönderilecek; şu an mutfağa ulaşmadı.</span></div>`));
+      if (tk.pending_approvals?.length) tcol.appendChild(h(`<div class="px-3 py-2 text-xs flex gap-2 items-center" style="background:var(--accent-soft);color:var(--text)">${J.icon("clock", 14)}${tk.pending_approvals.length} onay bekleyen talep</div>`));
       const list = h(`<div class="flex-1 overflow-y-auto px-3"></div>`);
       lines.forEach((ln) => list.appendChild(lineRow(ln)));
-      if (!lines.length) list.innerHTML = `<div class="p-8 text-center muted">Soldan ürün seçin</div>`;
+      if (!lines.length) list.innerHTML = J.empty("utensils", "Adisyon boş", "Soldaki menüden ürün seçerek sipariş eklemeye başlayın.");
       tcol.appendChild(list);
       const row = (l, v, b = "") => `<div class="flex justify-between ${b}"><span>${l}</span><span class="tabular-nums">${v}</span></div>`;
       tcol.appendChild(h(`<div class="p-3 border-t bd text-sm space-y-0.5">
@@ -384,14 +454,14 @@
         ${tk.discounts.filter((d) => !d.reversed_at).map((d) => row(`İndirim (${esc(d.reason)})`, "−" + money(d.amount))).join("")}
         ${row("KDV", money(tk.tax_total), "muted text-xs")}
         ${row(`<b class="text-base">${t("Toplam")}</b>`, `<b class="text-xl">${money(tk.total)}</b>`)}
-        ${Number(tk.paid_total) ? row(t("Ödenen"), money(tk.paid_total)) + row(`<b>${t("Kalan")}</b>`, `<b style="color:var(--accent)">${money(tk.remaining)}</b>`) : ""}</div>`));
+        ${Number(tk.paid_total) ? row(t("Ödenen"), money(tk.paid_total)) + row(`<b>${t("Kalan")}</b>`, `<b style="color:var(--accent-text)">${money(tk.remaining)}</b>`) : ""}</div>`));
       const bar = h(`<div class="p-3 grid grid-cols-2 gap-2 border-t bd"></div>`);
       const B = (label, cls, fn, cond = true, span = false) => { if (!cond) return; const b = h(`<button class="btn ${cls} ${span ? "col-span-2" : ""}">${label}</button>`); b.onclick = () => fn().catch(J.err); bar.appendChild(b); };
       const editable = ["open", "bill_requested"].includes(st);
-      B(`${t("Mutfağa Gönder")} ${drafts ? `(${drafts})` : ""} <span class="text-xs opacity-60">Ctrl+↵</span>`, "btn-primary btn-lg", () => send(), editable && J.can("ticket.send") && (drafts > 0), true);
-      B(t("Hesap iste"), "btn-ghost", async () => { tk = await J.post(`tickets/${id}/request_bill`); J.toast("Hesap istendi; kasaya bildirildi", "ok"); renderTicket(); }, st === "open" && J.can("ticket.request_bill") && !drafts);
-      B(`${t("Öde")} <span class="text-xs opacity-60">F9</span>`, "btn-dark", () => payModal(), editable && J.can("payment.take") && Number(tk.remaining) > 0);
-      B("Masayı kapat", "btn-ok", async () => { tk = await J.post(`tickets/${id}/close`); J.toast("Adisyon kapatıldı", "ok"); J.go("/floor"); }, (st === "paid" || (Number(tk.total) === 0 && tk.lines.some((l) => l.status === "void") && !drafts)) && (J.can("payment.take") || J.can("floor.manage")), true);
+      B(`${J.icon("send", 18)}${t("Mutfağa Gönder")}${drafts ? ` (${drafts})` : ""}`, "btn-primary btn-lg", () => send(), editable && J.can("ticket.send") && (drafts > 0), true);
+      B(`${J.icon("receipt", 16)}${t("Hesap iste")}`, "btn-ghost btn-lg", async () => { tk = await J.post(`tickets/${id}/request_bill`); J.toast("Hesap istendi; kasaya bildirildi", "ok"); renderTicket(); }, st === "open" && J.can("ticket.request_bill") && !drafts);
+      B(`${J.icon("wallet", 18)}${t("Öde")}`, "btn-dark btn-lg", () => payModal(), editable && J.can("payment.take") && Number(tk.remaining) > 0);
+      B(`${J.icon("circle-check", 18)}Masayı kapat`, "btn-ok btn-lg", async () => { if (!(await J.confirm("Masa boşaltıldı mı? Adisyon kapatılacak ve masa boşa çıkacak.", { ok: "Adisyonu kapat" }))) return; tk = await J.post(`tickets/${id}/close`); J.toast("Adisyon kapatıldı", "ok"); J.go("/floor"); }, (st === "paid" || (Number(tk.total) === 0 && tk.lines.some((l) => l.status === "void") && !drafts)) && (J.can("payment.take") || J.can("floor.manage")), true);
       tcol.appendChild(bar);
       qs("[data-more]", tcol).onclick = moreMenu;
     };
@@ -411,7 +481,7 @@
         if (!r) return;
         if (r.queued) return renderTicket();
         tk = r;
-        J.toast(`Parti ${r.sent_batch} mutfağa ulaştı ✓`, "ok");
+        J.toast(`Parti ${r.sent_batch} mutfağa ulaştı`, "ok");
         renderTicket();
       };
       await go(false);
@@ -477,7 +547,7 @@
           <div class="flex justify-between text-lg"><b>Kalan</b><b class="tabular-nums" style="color:var(--accent)">${money(prev.remaining)}</b></div></div>
           ${tk.payments.length ? `<h3 class="font-semibold mt-4 mb-1">Alınan ödemeler</h3>${tk.payments.map((p) => `<div class="flex justify-between text-sm"><span>${esc(p.method_label)} · ${J.dt(p.created_at)}</span><span>${money(p.amount)}${Number(p.refunded_amount) ? ` (iade ${money(p.refunded_amount)})` : ""}</span></div>`).join("")}` : ""}</div>
         <div class="space-y-3">
-          <div><div class="label">Ödeme yöntemi</div><div class="grid grid-cols-2 gap-2" data-methods>${[["cash", "💵 Nakit"], ["card", "💳 Kart"], ["meal_card", "🍽 Yemek kartı"], ["open_account", "📒 Açık hesap"]].map(([k, l]) => `<button class="btn btn-ghost btn-lg" data-m="${k}">${l}</button>`).join("")}</div></div>
+          <div><div class="label">Ödeme yöntemi</div><div class="grid grid-cols-2 gap-2" data-methods>${[["cash", "banknote", "Nakit"], ["card", "credit-card", "Kart"], ["meal_card", "utensils", "Yemek kartı"], ["open_account", "book-open", "Açık hesap"]].map(([k, ic, l]) => `<button class="btn btn-ghost btn-lg" data-m="${k}" type="button">${J.icon(ic, 18)}${l}</button>`).join("")}</div></div>
           <div><div class="label">Bölüştürme</div><div class="flex flex-wrap gap-2" data-modes>${[["full", "Tamamı"], ["partial", "Özel tutar"], ["equal", "Eşit böl"], ["items", "Ürün bazlı"]].map(([k, l]) => `<button class="chip" data-md="${k}">${l}</button>`).join("")}</div></div>
           <div data-mode-ui></div>
           <div><label class="label">Tahsil edilecek tutar</label><input class="input text-xl font-bold" data-amount type="number" step="0.01" inputmode="decimal"></div>
@@ -563,7 +633,7 @@
     };
     document.addEventListener("keydown", key);
     const offs = [J.on("ws:table", (d) => d.ticket === Number(id) && reload()), J.on("queue-sent", reload), J.on("queue-failed", reload), J.on("queue", () => renderTicket())];
-    return () => { document.removeEventListener("keydown", key); offs.forEach((f) => f()); main.classList.remove("!p-0"); };
+    return () => { document.removeEventListener("keydown", key); offs.forEach((f) => f()); main.classList.remove("page-bleed"); };
   };
 
   // ================================================================== KDS
@@ -571,8 +641,8 @@
     const stations = await J.get("stations");
     let station = localStorage.getItem("jet.station") || (J.can("kds.manage") ? "" : String(stations[0]?.id || ""));
     let done = false;
-    const head = h(`<div class="flex flex-wrap items-center gap-2 mb-3"><h1 class="text-2xl font-bold mr-2">${t("Mutfak")}</h1><div class="flex gap-2 flex-wrap" data-st></div><div class="flex-1"></div>
-      <button class="chip" data-done>Son hazırlananlar</button><button class="btn btn-ghost btn-sm" data-fs>⛶ Tam ekran</button></div>`);
+    const head = h(`<div class="flex flex-wrap items-center gap-2 mb-3"><h1 class="h1 mr-2">${t("Mutfak")}</h1><div class="flex gap-2 flex-wrap" data-st></div><div class="flex-1"></div>
+      <button class="chip" data-done>Son hazırlananlar</button><button class="btn btn-ghost" data-fs type="button">${J.icon("maximize", 16)}Tam ekran</button></div>`);
     const grid = h(`<div class="grid sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3"></div>`);
     main.append(head, grid);
     const renderSt = () => {
@@ -583,22 +653,23 @@
     };
     let orders = [];
     const render = () => {
-      grid.innerHTML = orders.length ? "" : `<div class="col-span-full card p-10 text-center muted text-lg">${done ? "Son 2 saatte hazırlanan yok" : "Bekleyen sipariş yok ✓"}</div>`;
+      grid.innerHTML = orders.length ? "" : `<div class="col-span-full card">${J.empty("chef-hat", done ? "Son 2 saatte hazırlanan sipariş yok" : "Bekleyen sipariş yok", done ? "" : "Mutfağa gönderilen siparişler burada kart olarak görünür.")}</div>`;
       orders.forEach((o) => {
         const late = o.late, prep = o.status === "preparing";
-        const card = h(`<article class="card flex flex-col ${late ? "ring-4" : ""}" style="${late ? "--tw-ring-color:var(--bad);" : ""}border-top:6px solid ${late ? "var(--bad)" : prep ? "var(--warn)" : "var(--info)"}" aria-label="Sipariş ${o.ticket_number}">
-          <header class="p-3 flex items-start gap-2 border-b bd"><div class="flex-1"><div class="text-2xl font-black">${o.table_name ? "Masa " + esc(o.table_name) : esc(o.channel)} </div><div class="text-xs muted">#${o.ticket_number} · Parti ${o.batch_number} · ${esc(o.waiter)} · ${esc(o.station_name)}</div></div>
-          <div class="text-right"><div class="text-2xl font-bold tabular-nums" style="color:${late ? "var(--bad)" : "inherit"}">${o.elapsed}′</div>${o.priority ? J.badge("Öncelik " + o.priority, "var(--accent)") : ""}</div></header>
-          <ul class="p-3 space-y-2 flex-1 text-lg">${o.lines.map((l) => `<li class="${l.void ? "line-through opacity-60" : ""}"><b>${J.num(l.qty)}×</b> ${esc(l.name)}${l.void ? ` <span class="badge" style="background:var(--bad);color:#fff">İPTAL</span>` : ""}${l.options.length ? `<div class="text-sm muted pl-6">${l.options.map(esc).join(", ")}</div>` : ""}${l.note ? `<div class="text-sm pl-6 font-semibold" style="color:var(--warn)">⚠ ${esc(l.note)}</div>` : ""}</li>`).join("")}</ul>
+        const tone = late ? ["var(--bad-soft)", "var(--bad)"] : prep ? ["var(--warn-soft)", "var(--warn)"] : ["var(--surface-2)", "var(--muted)"];
+        const card = h(`<article class="card flex flex-col" style="overflow:hidden" aria-label="Sipariş ${o.ticket_number}">
+          <header class="p-3 flex items-start gap-2 border-b bd" style="background:${tone[0]}"><div class="flex-1"><div class="text-2xl font-semibold">${o.table_name ? "Masa " + esc(o.table_name) : esc(o.channel)} </div><div class="text-xs muted">#${o.ticket_number} · Parti ${o.batch_number} · ${esc(o.waiter)} · ${esc(o.station_name)}</div></div>
+          <div class="text-right"><div class="text-2xl font-semibold tnum" style="color:${tone[1]}">${o.elapsed} dk</div>${late ? `<div class="text-xs font-medium" style="color:var(--bad)">Gecikti</div>` : prep ? `<div class="text-xs font-medium" style="color:var(--warn)">Hazırlanıyor</div>` : ""}${o.priority ? J.badge("Öncelik " + o.priority, "var(--accent-text)", "arrow-up") : ""}</div></header>
+          <ul class="p-3 space-y-2 flex-1 text-lg">${o.lines.map((l) => `<li class="${l.void ? "line-through opacity-60" : ""}"><b>${J.num(l.qty)}×</b> ${esc(l.name)}${l.void ? ` ${J.badge("İPTAL", "var(--bad)", "ban")}` : ""}${l.options.length ? `<div class="text-sm muted pl-6">${l.options.map(esc).join(", ")}</div>` : ""}${l.note ? `<div class="text-sm pl-6 font-medium flex items-center gap-1" style="color:var(--warn)">${J.icon("triangle-alert", 14)}${esc(l.note)}</div>` : ""}</li>`).join("")}</ul>
           <footer class="p-3 grid grid-cols-2 gap-2 border-t bd" data-f></footer></article>`);
         const f = qs("[data-f]", card);
         if (!done) {
-          if (o.status === "new") { const b = h(`<button class="btn btn-ghost btn-lg">${t("Başla")}</button>`); b.onclick = () => J.post(`kitchen/${o.id}/start`).then(load).catch(J.err); f.appendChild(b); }
-          const r = h(`<button class="btn btn-ok btn-lg ${o.status === "new" ? "" : "col-span-2"}">✓ ${t("Hazır")}</button>`);
+          if (o.status === "new") { const b = h(`<button class="btn btn-ghost btn-lg" type="button">${t("Başla")}</button>`); b.onclick = () => J.post(`kitchen/${o.id}/start`).then(load).catch(J.err); f.appendChild(b); }
+          const r = h(`<button class="btn btn-ok btn-lg ${o.status === "new" ? "" : "col-span-2"}" type="button">${J.icon("check", 20)}${t("Hazır")}</button>`);
           r.onclick = () => J.post(`kitchen/${o.id}/ready`).then(() => { J.toast(`Masa ${o.table_name || o.ticket_number} hazır işaretlendi`, "ok"); load(); }).catch(J.err);
           f.appendChild(r);
           if (J.can("kds.manage")) {
-            const up = h(`<button class="btn btn-ghost btn-sm">▲ Öncelik</button>`); up.onclick = () => J.post(`kitchen/${o.id}/priority`, { priority: o.priority + 1 }).then(load).catch(J.err);
+            const up = h(`<button class="btn btn-ghost btn-sm" type="button">${J.icon("arrow-up", 14)}Öncelik</button>`); up.onclick = () => J.post(`kitchen/${o.id}/priority`, { priority: o.priority + 1 }).then(load).catch(J.err);
             const all = h(`<button class="btn btn-ghost btn-sm">Tüm partiyi hazırla</button>`); all.onclick = () => J.post(`kitchen/${o.id}/ready_all`).then(load).catch(J.err);
             f.append(up, all);
           }
@@ -624,9 +695,9 @@
     main.appendChild(list);
     const load = async () => {
       const rows = await J.get(`ready-orders${mine ? "?mine=1" : ""}`);
-      list.innerHTML = rows.length ? "" : `<div class="col-span-full card p-10 text-center muted">Hazır sipariş yok</div>`;
+      list.innerHTML = rows.length ? "" : `<div class="col-span-full card">${J.empty("bell-ring", "Hazır sipariş yok", "Mutfak bir siparişi hazırladığında burada teslim almanız için listelenir.")}</div>`;
       rows.forEach((b) => {
-        const c = h(`<div class="card p-4 flex flex-col gap-2" style="border-left:6px solid var(--accent)"><div class="flex items-center"><div class="text-2xl font-black flex-1">${esc(b.table)}</div><span class="text-sm muted">${b.minutes} dk önce</span></div><div class="text-xs muted">#${b.ticket_number} · Parti ${b.number} · ${esc(b.waiter)}</div><ul class="text-sm">${b.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul><button class="btn btn-ok btn-lg mt-auto">✓ Teslim aldım</button></div>`);
+        const c = h(`<div class="card p-4 flex flex-col gap-2"><div class="flex items-center"><div class="text-xl font-semibold flex-1">${esc(b.table)}</div><span class="text-sm muted">${b.minutes} dk önce</span></div><div class="text-xs muted">#${b.ticket_number} · Parti ${b.number} · ${esc(b.waiter)}</div><ul class="text-sm">${b.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul><button class="btn btn-ok btn-lg mt-auto" type="button">${J.icon("check", 20)}Teslim aldım</button></div>`);
         qs("button", c).onclick = () => J.post("ready-orders", { batch: b.id }).then(load).catch(J.err);
         list.appendChild(c);
       });
@@ -700,7 +771,7 @@
           });
         }
         if (cur.status === "pending_approval" && J.can("cash.approve")) {
-          B("✓ Gün sonunu onayla ve kapat", "btn-ok", async () => { if (await J.confirm("Gün sonu onaylanıp kasa kapatılsın mı?")) { await J.post("cash", { action: "approve" }); J.toast("Gün kapatıldı; rapor arşivlendi", "ok"); load(); } });
+          B(`${J.icon("check", 16)}Gün sonunu onayla ve kapat`, "btn-ok", async () => { if (await J.confirm("Gün sonu onaylanıp kasa kapatılsın mı?")) { await J.post("cash", { action: "approve" }); J.toast("Gün kapatıldı; rapor arşivlendi", "ok"); load(); } });
           B("Sayımı reddet", "btn-ghost", async () => { const v = await J.askReason("Sayımı reddet (yeniden sayım)"); if (v) { await J.post("cash", { action: "reject", ...v }); load(); } });
         }
         body.appendChild(top);
@@ -759,7 +830,7 @@
   // ================================================================== GARSON PWA
   P.waiter = async (main) => {
     J.state.isWaiterMode = true;
-    const head = h(`<div class="flex items-center gap-2 mb-3"><h1 class="text-xl font-bold flex-1">Garson</h1><a href="/ready" data-link class="btn btn-ghost btn-sm" data-ready>🔔 Hazır <b data-rc>0</b></a></div>`);
+    const head = h(`<div class="flex items-center gap-2 mb-3"><h1 class="h1 flex-1">Garson</h1><a href="/ready" data-link class="btn btn-ghost" data-ready>${J.icon("bell-ring", 16)}Hazır siparişler <b data-rc class="tnum">0</b></a></div>`);
     const halls = h(`<div class="flex gap-2 overflow-x-auto pb-2"></div>`);
     const grid = h(`<div class="grid grid-cols-3 sm:grid-cols-4 gap-2"></div>`);
     main.append(head, halls, grid);
@@ -771,7 +842,7 @@
       grid.innerHTML = "";
       data.tables.filter((x) => x.hall === hall).sort(natural).forEach((tb) => {
         const [label] = STATUS[tb.status];
-        const b = h(`<button class="tile table-card st-${tb.status} p-2 min-h-[92px]"><div class="text-2xl font-black">${esc(tb.name)}</div><div class="text-[11px] font-semibold" style="color:var(--st)">${esc(t(label))}</div>${tb.ticket ? `<div class="mt-auto text-sm font-bold">${money(tb.ticket.total)}</div>${tb.ticket.ready ? `<span class="badge pulse" style="background:var(--accent);color:var(--accent-ink)">Hazır</span>` : ""}` : ""}</button>`);
+        const b = h(`<button class="tile table-card st-${tb.status} min-h-[96px]" data-st="${tb.status}"><div class="text-xl font-semibold tnum">${esc(tb.name)}</div><div class="st-text"><span class="dot"></span>${esc(t(label))}</div>${tb.ticket ? `<div class="mt-auto text-sm font-semibold tnum">${money(tb.ticket.total)}</div>${tb.ticket.ready ? `<span class="badge pulse" style="background:var(--accent);color:var(--accent-ink)">${J.icon("bell-ring", 12)}Hazır</span>` : ""}` : ""}</button>`);
         b.onclick = async () => {
           try { if (tb.ticket) return J.go(`/ticket/${tb.ticket.id}`); const tk = await J.post(`tables/${tb.id}/open`, {}); J.go(`/ticket/${tk.id}`); }
           catch (e) { J.err(e); }

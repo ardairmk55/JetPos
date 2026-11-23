@@ -3,18 +3,18 @@
 {% block body %}
 <main id="main" class="min-h-screen grid lg:grid-cols-2">
   <section class="hidden lg:flex flex-col justify-between p-12 bg-ink text-white">
-    <div class="text-3xl font-black tracking-tight">JET<span class="text-jet">POS</span></div>
+    <div class="text-xl"><span class="inline-flex items-center gap-2.5"><span style="width:30px;height:30px;border-radius:6px;background:var(--accent);color:#1E222D;display:grid;place-items:center;font-weight:700;font-size:.85rem" aria-hidden="true">J</span><span style="font-weight:600;letter-spacing:.01em">JETPOS</span></span></div>
     <div>
-      <h1 class="text-4xl font-bold leading-tight">Hızlı Servis,<br>Akıllı Yönetim.</h1>
+      <h1 class="text-2xl font-semibold" style="line-height:1.25;max-width:20ch">Hızlı Servis, Akıllı Yönetim.</h1>
       <p class="mt-4 text-ink-200 max-w-md">Masa, adisyon, mutfak, kasa, stok ve yönetim tek platformda. İnternet kesilse de yerel ağda çalışmaya devam eder.</p>
     </div>
     <p class="text-ink-300 text-sm">Sürüm {{ JETPOS_VERSION }}</p>
   </section>
   <section class="flex items-center justify-center p-6">
     <div class="w-full max-w-sm">
-      <div class="lg:hidden text-3xl font-black mb-8">JET<span class="text-jet">POS</span></div>
+      <div class="lg:hidden text-xl mb-8"><span class="inline-flex items-center gap-2.5"><span style="width:30px;height:30px;border-radius:6px;background:var(--accent);color:#1E222D;display:grid;place-items:center;font-weight:700;font-size:.85rem" aria-hidden="true">J</span><span style="color:var(--text);font-weight:600;letter-spacing:.01em">JETPOS</span></span></div>
       <div id="pw-panel">
-        <h2 class="text-2xl font-bold mb-1" data-i18n="login.title">Giriş yap</h2>
+        <h2 class="h1 mb-1" data-i18n="login.title">Giriş yap</h2>
         <p class="muted text-sm mb-6" data-i18n="login.sub">Kullanıcı adınız ve şifrenizle oturum açın.</p>
         <form id="login-form" class="space-y-4" autocomplete="on">
           <div><label class="label" for="username" data-i18n="login.username">Kullanıcı adı</label>
@@ -27,7 +27,7 @@
           <button class="btn btn-primary btn-lg w-full" type="submit" data-i18n="login.submit">Giriş</button>
         </form>
         <div class="mt-6 flex items-center justify-between text-sm">
-          <button id="theme" class="btn btn-ghost btn-sm" type="button" aria-label="Tema">◐ Tema</button>
+          <button id="theme" class="btn btn-ghost btn-sm" type="button" aria-label="Tema değiştir"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg> Tema</button>
           <a class="underline muted" href="/apply">İşletme başvurusu</a>
         </div>
       </div>

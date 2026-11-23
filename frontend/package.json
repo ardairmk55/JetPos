@@ -4,7 +4,8 @@
   "description": "",
   "scripts": {
     "build": "tailwindcss -c tailwind.config.js -i src/input.css -o ../backend/apps/web/static/web/app.css --minify",
-    "watch": "tailwindcss -c tailwind.config.js -i src/input.css -o ../backend/apps/web/static/web/app.css --watch"
+    "watch": "tailwindcss -c tailwind.config.js -i src/input.css -o ../backend/apps/web/static/web/app.css --watch",
+    "assets": "node build-assets.mjs"
   },
   "keywords": [],
   "author": "",
@@ -12,5 +13,9 @@
   "devDependencies": {
     "tailwindcss": "^3.4.17"
   },
-  "private": true
+  "private": true,
+  "dependencies": {
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "lucide-static": "^1.76.0"
+  }
 }

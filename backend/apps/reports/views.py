@@ -51,7 +51,13 @@ class ReportRunView(APIView):
 
 class DashboardView(APIView):
     def get(self, request):
-        return Response(services.dashboard(current_branch(request), request.user))
+        from django.utils import timezone
+        from django.utils.dateparse import parse_date
+
+        day = parse_date(request.GET.get("date", "") or "")
+        if day and day > timezone.localdate():
+            raise BusinessError("Gelecek bir tarih seçilemez")
+        return Response(services.dashboard(current_branch(request), request.user, day))
 
 
 class TemplateSerializer(serializers.ModelSerializer):

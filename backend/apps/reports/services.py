@@ -456,70 +456,92 @@ def run_due_schedules(now=None, max_attempts=3):
 
 
 # ------------------------------------------------------------------ dashboard
-def dashboard(branch, user):
+def dashboard(branch, user, day=None):
+    """Rol bazlı özet. `day`: seçili tarih (varsayılan bugün). Anlık operasyon kartları her zaman şu anı gösterir."""
     from apps.core import roles
-    from apps.pos.models import ACTIVE_TICKET_STATES, CashDay, KitchenOrder, Payment, Ticket, TicketLine
+    from apps.pos.models import (ACTIVE_TICKET_STATES, CashDay, KitchenBatch, KitchenOrder, Payment, Table, Ticket,
+                                 TicketLine)
 
     today = timezone.localdate()
+    day = day or today
     tz = timezone.get_current_timezone()
-    cards = {}
-    charts = {}
-    closed = Ticket.objects.filter(branch=branch, business_date=today, status__in=("closed", "paid"))
+    sold = ("closed", "paid")
+    cards, charts, lists = {}, {}, {}
     if roles.has_perm(user, roles.REPORTS_VIEW) or roles.has_perm(user, roles.CASH_MANAGE):
-        agg = closed.aggregate(n=Count("id"), s=Sum("total"))
-        y = Ticket.objects.filter(branch=branch, business_date=today - timedelta(days=1),
-                                  status__in=("closed", "paid")).aggregate(s=Sum("total"))["s"] or 0
-        cards["sales_today"] = {"value": _r(agg["s"]), "prev": _r(y)}
-        cards["tickets_today"] = {"value": agg["n"]}
-        cards["avg_ticket"] = {"value": _r((agg["s"] or 0) / agg["n"]) if agg["n"] else 0}
-        week = []
-        for i in range(6, -1, -1):
-            d = today - timedelta(days=i)
-            week.append([d.strftime("%d.%m"), _r(Ticket.objects.filter(branch=branch, business_date=d,
-                                                                       status__in=("closed", "paid")).aggregate(s=Sum("total"))["s"])])
-        charts["week"] = {"type": "line", "labels": [w[0] for w in week], "series": [{"name": "Ciro", "data": [w[1] for w in week]}]}
-        hourly = {r["h"]: r["n"] for r in Ticket.objects.filter(branch=branch, business_date=today).annotate(
+        # Tek sorguda 8 günlük ciro (önceki: gün başına 1 sorgu)
+        rows = {r["business_date"]: r for r in Ticket.objects.filter(
+            branch=branch, status__in=sold, business_date__gte=day - timedelta(days=7), business_date__lte=day)
+            .values("business_date").annotate(n=Count("id"), s=Sum("total"))}
+        cur = rows.get(day, {})
+        n, total = cur.get("n", 0), cur.get("s") or 0
+        cards["sales_today"] = {"value": _r(total), "prev": _r(rows.get(day - timedelta(days=1), {}).get("s")),
+                                "last_week": _r(rows.get(day - timedelta(days=7), {}).get("s"))}
+        cards["tickets_today"] = {"value": n}
+        cards["avg_ticket"] = {"value": _r(total / n) if n else 0}
+        week = [(day - timedelta(days=i)) for i in range(6, -1, -1)]
+        charts["week"] = {"type": "bar", "labels": [d.strftime("%d.%m") for d in week],
+                          "series": [{"name": "Ciro", "data": [_r(rows.get(d, {}).get("s")) for d in week]}]}
+        hourly = {r["h"]: r["n"] for r in Ticket.objects.filter(branch=branch, business_date=day).annotate(
             h=ExtractHour("opened_at", tzinfo=tz)).values("h").annotate(n=Count("id"))}
         charts["hourly"] = {"type": "bar", "labels": [f"{h:02d}" for h in range(8, 24)],
                             "series": [{"name": "Adisyon", "data": [hourly.get(h, 0) for h in range(8, 24)]}]}
-        top = TicketLine.objects.filter(ticket__branch=branch, ticket__business_date=today, status="sent") \
+        top = TicketLine.objects.filter(ticket__branch=branch, ticket__business_date=day, status="sent") \
             .values("product__name").annotate(q=Sum("qty")).order_by("-q")[:8]
         charts["top_products"] = {"type": "bar", "labels": [t["product__name"] for t in top],
                                   "series": [{"name": "Adet", "data": [_r(t["q"]) for t in top]}]}
-        pm = Payment.objects.filter(branch=branch, created_at__date=today).values("method").annotate(s=Sum("amount"))
         labels = dict(Payment._meta.get_field("method").choices)
-        charts["payments"] = {"type": "donut", "labels": [labels[p["method"]] for p in pm],
-                              "series": [{"name": "Tahsilat", "data": [_r(p["s"]) for p in pm]}]}
+        pm = {p["method"]: p["s"] for p in Payment.objects.filter(branch=branch, created_at__date=day)
+              .values("method").annotate(s=Sum("amount"))}
+        charts["payments"] = {"type": "donut", "labels": [labels[m] for m in pm],
+                              "series": [{"name": "Tahsilat", "data": [_r(v) for v in pm.values()]}]}
+        cards["payments_cash"] = {"value": _r(pm.get("cash"))}
+        cards["payments_card"] = {"value": _r(pm.get("card"))}
     if roles.has_perm(user, roles.FLOOR_VIEW):
         active = Ticket.objects.filter(branch=branch, status__in=ACTIVE_TICKET_STATES)
         cards["open_tickets"] = {"value": active.count(), "amount": _r(active.aggregate(s=Sum("total"))["s"])}
         cards["bill_requested"] = {"value": active.filter(status="bill_requested").count()}
+        cards["active_tables"] = {"value": active.filter(table__isnull=False).values("table").distinct().count(),
+                                  "total": Table.objects.filter(branch=branch, is_active=True).count()}
+        now = timezone.now()
+        lists["open_tables"] = [{"id": t.id, "table": t.table.name if t.table else t.get_channel_display(), "total": _r(t.total),
+                                 "minutes": int((now - t.opened_at).total_seconds() // 60), "status": t.status,
+                                 "waiter": (t.waiter.get_full_name() or t.waiter.username) if t.waiter else ""}
+                                for t in active.select_related("table", "waiter").order_by("opened_at")[:8]]
     if roles.has_perm(user, roles.KDS_VIEW) or roles.has_perm(user, roles.READY_VIEW):
         late = branch.settings.late_order_minutes
+        now = timezone.now()
         pend = KitchenOrder.objects.filter(batch__ticket__branch=branch).exclude(status="ready")
-        cards["kitchen_pending"] = {"value": pend.count(),
-                                    "late": pend.filter(created_at__lt=timezone.now() - timedelta(minutes=late)).count()}
-        from apps.pos.models import KitchenBatch
-
-        cards["ready_orders"] = {"value": KitchenBatch.objects.filter(ticket__branch=branch, status="ready").count()}
+        cards["kitchen_pending"] = {"value": pend.count(), "late": pend.filter(created_at__lt=now - timedelta(minutes=late)).count()}
+        ready = KitchenBatch.objects.filter(ticket__branch=branch, status="ready")
+        cards["ready_orders"] = {"value": ready.count()}
+        lists["kitchen"] = [{"table": o.batch.ticket.table.name if o.batch.ticket.table else f"#{o.batch.ticket.number}",
+                             "station": o.station.name, "minutes": int((now - o.created_at).total_seconds() // 60),
+                             "late": o.created_at < now - timedelta(minutes=late)}
+                            for o in pend.select_related("station", "batch__ticket__table").order_by("created_at")[:6]]
+        lists["ready"] = [{"ticket": b.ticket_id, "table": b.ticket.table.name if b.ticket.table else f"#{b.ticket.number}",
+                           "minutes": int((now - b.ready_at).total_seconds() // 60) if b.ready_at else 0}
+                          for b in ready.select_related("ticket__table").order_by("ready_at")[:6]]
     if roles.has_perm(user, roles.STOCK_VIEW):
         from apps.inventory.models import StockItem, StockLevel
         from apps.inventory.services import default_warehouse
 
         wh = default_warehouse(branch)
         levels = {lv.item_id: lv.qty for lv in StockLevel.objects.filter(warehouse=wh)}
-        items = StockItem.objects.filter(business=branch.business, is_active=True)
-        cards["low_stock"] = {"value": sum(1 for it in items if levels.get(it.id, 0) <= it.min_level)}
+        crit = [(it, levels.get(it.id, 0)) for it in StockItem.objects.filter(business=branch.business, is_active=True)
+                if levels.get(it.id, 0) <= it.min_level]
+        cards["low_stock"] = {"value": len(crit)}
+        lists["low_stock"] = [{"name": it.name, "qty": _r(q), "min": _r(it.min_level), "unit": it.unit}
+                              for it, q in sorted(crit, key=lambda x: x[1])[:6]]
     if roles.has_perm(user, roles.CASH_MANAGE):
-        day = CashDay.objects.filter(branch=branch, status__in=("open", "pending_approval")).first()
+        cd = CashDay.objects.filter(branch=branch, status__in=("open", "pending_approval")).first()
         from apps.pos.services import expected_cash
 
-        cards["cash"] = {"status": day.status if day else "closed", "expected": _r(expected_cash(day)) if day else None}
+        cards["cash"] = {"status": cd.status if cd else "closed", "expected": _r(expected_cash(cd)) if cd else None}
     if roles.has_perm(user, roles.APPROVALS_DECIDE) or roles.has_perm(user, roles.APPROVALS_MUNICIPAL):
         from apps.pos.models import ApprovalRequest
 
         cards["approvals"] = {"value": ApprovalRequest.objects.filter(branch=branch, status="pending").count()}
-    return {"cards": cards, "charts": charts, "date": str(today)}
+    return {"cards": cards, "charts": charts, "lists": lists, "date": str(day), "today": str(today)}
 
 
 __all__ = ["DecimalField", "ExpressionWrapper", "F", "Q", "TruncDate", "date"]

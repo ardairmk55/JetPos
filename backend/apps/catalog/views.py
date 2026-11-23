@@ -1,4 +1,4 @@
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Prefetch, Q, Sum
 from django.utils import timezone
 from rest_framework import permissions
 from rest_framework.decorators import action
@@ -8,7 +8,8 @@ from rest_framework.views import APIView
 from apps.core import roles
 from apps.core.tenancy import HasPerm, TenantViewSet, current_branch, current_business
 
-from .models import Campaign, Category, CustomerGroup, OptionGroup, PriceHistory, Product, ProductPrice, Station, TaxRate
+from .models import (Campaign, Category, CustomerGroup, Option, OptionGroup, PriceHistory, Product, ProductPrice,
+                     Station, TaxRate)
 from .pricing import resolve_price
 from .serializers import (CampaignSerializer, CategorySerializer, CustomerGroupSerializer, OptionGroupSerializer,
                           PriceHistorySerializer, ProductPriceSerializer, ProductSerializer, StationSerializer,
@@ -53,13 +54,19 @@ class CategoryViewSet(CatalogViewSet):
         branch = current_branch(self.request, required=False)
         if branch and self.request.GET.get("all") != "1":
             qs = qs.filter(Q(branches__isnull=True) | Q(branches=branch)).distinct()
-        return qs
+        # Annotate instead of a per-row count() in the serializer (was N+1 on every category list).
+        return qs.annotate(_product_count=Count("products", filter=Q(products__is_active=True)))
 
 
 class OptionGroupViewSet(CatalogViewSet):
     queryset = OptionGroup.objects.all()
     serializer_class = OptionGroupSerializer
     ordering = ("sort", "id")
+
+    def get_queryset(self):
+        # Prefetch active options so the serializer does not query per row (was N+1 on every list).
+        return super().get_queryset().prefetch_related(
+            Prefetch("options", queryset=Option.objects.filter(is_active=True).order_by("sort", "id")))
 
 
 class ProductViewSet(CatalogViewSet):

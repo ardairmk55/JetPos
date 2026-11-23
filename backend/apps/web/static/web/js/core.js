@@ -91,13 +91,13 @@
           try {
             await J.api(item.method, item.url, item.body, { idem: item.idem });
             await J.queue.remove(item.id);
-            J.toast(`✓ ${item.label || "İşlem"} gönderildi`, "ok");
+            J.toast(`${item.label || "İşlem"} gönderildi`, "ok");
             J.emit("queue-sent", item);
           } catch (e) {
             if (e instanceof ApiError) {
               if (e.status === 409 && e.data?.code === "in_progress") continue;
               await J.queue.remove(item.id);
-              J.toast(`✗ ${item.label || "İşlem"} gönderilemedi: ${e.data?.detail || e.status}`, "bad", 10000);
+              J.toast(`${item.label || "İşlem"} gönderilemedi: ${e.data?.detail || e.status}`, "bad", 10000);
               J.emit("queue-failed", { item, error: e });
             } else break; // hâlâ ağ yok
           }
@@ -154,8 +154,8 @@
 
   // ------------------------------------------------------------------ toast
   J.toast = (msg, kind = "info", ms = 4000) => {
-    const colors = { ok: "var(--ok)", bad: "var(--bad)", warn: "var(--warn)", info: "var(--info)" };
-    const el = J.h(`<div class="card p-3 pl-4 text-sm font-medium flex gap-3 items-start" style="border-left:5px solid ${colors[kind] || colors.info}" role="status"><div class="flex-1">${J.esc(msg)}</div><button class="muted" aria-label="Kapat">✕</button></div>`);
+    const meta = { ok: ["circle-check", "var(--ok)"], bad: ["circle-alert", "var(--bad)"], warn: ["triangle-alert", "var(--warn)"], info: ["info", "var(--info)"] }[kind] || ["info", "var(--info)"];
+    const el = J.h(`<div class="float p-3 text-sm flex gap-3 items-start" role="status"><span style="color:${meta[1]};margin-top:1px">${J.icon(meta[0], 18)}</span><div class="flex-1 font-medium">${J.esc(msg)}</div><button class="muted" aria-label="Kapat" type="button">${J.icon("x", 16)}</button></div>`);
     el.querySelector("button").onclick = () => el.remove();
     J.qs("#toasts")?.appendChild(el);
     setTimeout(() => el.remove(), ms);

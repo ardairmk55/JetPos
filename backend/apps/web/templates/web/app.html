@@ -1,48 +1,56 @@
 {% extends "web/base.html" %}{% load static %}
 {% block body %}
-<div id="app" class="min-h-screen flex">
-  <aside id="sidebar" class="no-print hidden md:flex w-60 shrink-0 flex-col bg-ink text-white h-screen sticky top-0" aria-label="Ana menü">
-    <a href="/" class="px-5 py-5 text-2xl font-black tracking-tight" data-link>JET<span class="text-jet">POS</span></a>
-    <nav id="nav" class="flex-1 overflow-y-auto px-3 space-y-0.5 pb-4"></nav>
-    <div class="px-4 py-3 text-xs text-ink-300 border-t border-ink-600" id="side-foot"></div>
+<div id="app" class="shell">
+  <aside id="sidebar" class="side no-print" aria-label="Ana menü">
+    <a href="/" class="brand" data-link aria-label="JETPOS ana sayfa"><span class="brand-mark" aria-hidden="true">J</span><span class="brand-text">JETPOS</span></a>
+    <nav id="nav" aria-label="Sayfalar"></nav>
+    <div class="side-foot">
+      <div class="relative">
+        <button id="user-btn" class="side-user" aria-haspopup="menu" aria-expanded="false">
+          <span class="avatar" id="user-avatar" aria-hidden="true"></span>
+          <span class="side-user-text min-w-0 flex-1"><span id="user-name" class="block truncate text-sm font-medium"></span><span id="user-ctx" class="block truncate text-xs" style="color:var(--side-muted)"></span></span>
+          <span class="chev" id="user-chev"></span>
+        </button>
+        <div id="user-menu" class="float hidden absolute z-50 p-1" style="left:0;bottom:calc(100% + 6px);width:240px" role="menu"></div>
+      </div>
+      <button id="collapse-btn" class="nav-item mt-1" type="button" aria-label="Menüyü daralt"></button>
+    </div>
   </aside>
   <div class="flex-1 min-w-0 flex flex-col">
-    <header class="no-print sticky top-0 z-30 flex items-center gap-2 px-3 md:px-5 h-16 border-b bd" style="background:var(--surface)">
-      <button id="menu-btn" class="md:hidden btn btn-ghost btn-sm" aria-label="Menü">☰</button>
-      <div class="relative flex-1 max-w-xl">
-        <input id="gsearch" class="input" type="search" placeholder="Ara: masa, adisyon, ürün, müşteri…  ( / )" aria-label="Global arama" autocomplete="off">
-        <div id="gsearch-res" class="hidden absolute left-0 right-0 mt-1 card max-h-[70vh] overflow-y-auto z-40" role="listbox"></div>
+    <header class="topbar no-print">
+      <button id="menu-btn" class="btn btn-quiet btn-icon lg:hidden" aria-label="Menüyü aç" type="button"></button>
+      <div id="ctx" class="hidden md:flex items-center gap-2 min-w-0 pr-2 text-sm" style="color:var(--muted)"></div>
+      <div class="relative flex-1" style="max-width:520px">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color:var(--faint)" id="search-ic"></span>
+        <input id="gsearch" class="input" style="padding-left:2.25rem" type="search" placeholder="Masa, adisyon, ürün, müşteri ara" aria-label="Genel arama" autocomplete="off" aria-controls="gsearch-res">
+        <kbd class="hidden md:block absolute right-3 top-1/2 -translate-y-1/2 text-xs px-1.5 rounded surface-2 muted" aria-hidden="true">/</kbd>
+        <div id="gsearch-res" class="hidden absolute left-0 right-0 mt-1 float max-h-[70vh] overflow-y-auto z-40 p-1" role="listbox"></div>
       </div>
+      <div class="flex-1"></div>
       <span id="net" class="badge hidden" role="status"></span>
-      <span id="queue-badge" class="badge hidden" style="background:var(--warn);color:#fff" role="status"></span>
-      <select id="branch-sel" class="input !w-auto hidden" aria-label="Şube"></select>
-      <button id="notif-btn" class="btn btn-ghost btn-sm relative" aria-label="Bildirimler">🔔<span id="notif-count" class="hidden absolute -top-1 -right-1 badge bg-jet text-ink">0</span></button>
-      <button id="theme-btn" class="btn btn-ghost btn-sm" aria-label="Tema değiştir">◐</button>
-      <button id="lang-btn" class="btn btn-ghost btn-sm" aria-label="Dil">TR</button>
-      <div class="relative">
-        <button id="user-btn" class="btn btn-ghost btn-sm" aria-haspopup="menu"><span id="user-name">…</span> ▾</button>
-        <div id="user-menu" class="hidden absolute right-0 mt-1 w-56 card p-1 z-40" role="menu"></div>
-      </div>
+      <span id="queue-badge" class="badge hidden" role="status"></span>
+      <select id="branch-sel" class="input hidden" style="width:auto" aria-label="Şube"></select>
+      <button id="notif-btn" class="btn btn-quiet btn-icon relative" aria-label="Bildirimler" data-tip="Bildirimler" type="button"><span id="notif-ic"></span><span id="notif-count" class="absolute" style="display:none;top:2px;right:2px;background:var(--accent);color:#1E222D;min-width:18px;height:18px;border-radius:9px;padding:0 5px;font-size:.6875rem;font-weight:600;place-items:center">0</span></button>
+      <button id="theme-btn" class="btn btn-quiet btn-icon" aria-label="Temayı değiştir" data-tip="Tema" type="button"></button>
+      <button id="lang-btn" class="btn btn-quiet btn-icon" aria-label="Dil" data-tip="Dil / Language" type="button"></button>
     </header>
-    <main id="main" class="flex-1 p-3 md:p-5" tabindex="-1"></main>
+    <main id="main" class="page" tabindex="-1"></main>
   </div>
 </div>
-<div id="drawer" class="hidden fixed inset-0 z-40 md:hidden" aria-hidden="true">
-  <div class="absolute inset-0 bg-black/50" data-close></div>
-  <div class="absolute left-0 top-0 bottom-0 w-64 bg-ink text-white p-3 overflow-y-auto" id="drawer-nav"></div>
-</div>
-<div id="notif-panel" class="hidden fixed right-2 top-16 w-[min(380px,95vw)] max-h-[75vh] overflow-y-auto card z-40 p-2" aria-live="polite"></div>
-<div id="toasts" class="fixed bottom-4 right-4 z-[60] space-y-2 w-[min(380px,92vw)]" aria-live="assertive"></div>
+<div id="scrim" class="scrim hidden"></div>
+<div id="notif-panel" class="hidden fixed right-3 float z-40 p-1 overflow-y-auto" style="top:60px;width:min(380px,calc(100vw - 24px));max-height:75vh" aria-live="polite"></div>
+<div id="toasts" class="fixed bottom-4 right-4 z-[60] space-y-2" style="width:min(380px,calc(100vw - 32px))" aria-live="assertive"></div>
 <div id="modal-root"></div>
-<div id="lock" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-ink/95 p-4"></div>
+<div id="lock" class="hidden fixed inset-0 z-[70] flex items-center justify-center p-4" style="background:color-mix(in srgb,var(--ink) 94%,transparent)"></div>
 {% endblock %}
 {% block scripts %}
 <script>window.JET_VERSION = "{{ JETPOS_VERSION }}";</script>
-<script src="{% static 'web/js/core.js' %}"></script>
-<script src="{% static 'web/js/i18n_en.js' %}"></script>
-<script src="{% static 'web/js/ui.js' %}"></script>
-<script src="{% static 'web/js/pages_pos.js' %}"></script>
-<script src="{% static 'web/js/pages_mgmt.js' %}"></script>
-<script src="{% static 'web/js/pages_admin.js' %}"></script>
-<script src="{% static 'web/js/app.js' %}"></script>
+<script src="{% static 'web/js/core.js' %}?v={{ ASSET_V }}"></script>
+<script src="{% static 'web/js/icons.js' %}?v={{ ASSET_V }}"></script>
+<script src="{% static 'web/js/i18n_en.js' %}?v={{ ASSET_V }}"></script>
+<script src="{% static 'web/js/ui.js' %}?v={{ ASSET_V }}"></script>
+<script src="{% static 'web/js/pages_pos.js' %}?v={{ ASSET_V }}"></script>
+<script src="{% static 'web/js/pages_mgmt.js' %}?v={{ ASSET_V }}"></script>
+<script src="{% static 'web/js/pages_admin.js' %}?v={{ ASSET_V }}"></script>
+<script src="{% static 'web/js/app.js' %}?v={{ ASSET_V }}"></script>
 {% endblock %}
