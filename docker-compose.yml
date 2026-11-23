@@ -5,6 +5,8 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
+    # Bazı VPS'lerde sağlayıcının DNS'ine konteynerden ulaşılamıyor; genel DNS kullan.
+    dns: [1.1.1.1, 8.8.8.8]
     volumes:
       - poshane-data:/data
     expose:
@@ -14,6 +16,7 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
+    dns: [1.1.1.1, 8.8.8.8]
     volumes:
       - poshane-data:/data
     depends_on:
@@ -23,6 +26,7 @@ services:
   caddy:
     image: caddy:2
     restart: unless-stopped
+    dns: [1.1.1.1, 8.8.8.8]
     depends_on:
       - app
     ports:
