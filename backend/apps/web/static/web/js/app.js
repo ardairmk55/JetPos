@@ -83,7 +83,21 @@
     hits.forEach(([node, o]) => { node.nodeValue = o; });
     root.querySelectorAll?.("[placeholder],[title],[aria-label],[data-tip]").forEach((e) => ["placeholder", "title", "aria-label", "data-tip"].forEach((a) => { const v = e.getAttribute(a); if (v && d[v]) e.setAttribute(a, d[v]); }));
   };
-  new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach(trNode))).observe(document.body, { childList: true, subtree: true });
+  // Erişilebilirlik: etiketsiz filtre alanlarına (tarih, durum seçici, arama) erişilebilir ad ver.
+  const FIELD_LABELS = { s: "Durum", d: "Tarih", d1: "Başlangıç tarihi", d2: "Bitiş tarihi", q: "Ara", tpl: "Kayıtlı şablon",
+    type: "Rapor türü", date_from: "Başlangıç tarihi", date_to: "Bitiş tarihi", staff: "Personel", hall: "Salon", channel: "Kanal" };
+  const labelOrphans = (root) => {
+    if (root.nodeType !== 1) return;
+    const fields = root.matches?.("input,select,textarea") ? [root] : [];
+    root.querySelectorAll?.("input:not([type=hidden]),select,textarea").forEach((e) => fields.push(e));
+    fields.forEach((e) => {
+      if ((e.labels && e.labels.length) || e.hasAttribute("aria-label") || e.hasAttribute("aria-labelledby")) return;
+      const key = e.dataset.k || Object.keys(e.dataset)[0];
+      const name = FIELD_LABELS[key] || e.getAttribute("placeholder") || e.title;
+      if (name) e.setAttribute("aria-label", name);
+    });
+  };
+  new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => { labelOrphans(n); trNode(n); }))).observe(document.body, { childList: true, subtree: true });
   J.translateDom = () => trNode(document.body);
 
   J.applyPrefs = (me) => {

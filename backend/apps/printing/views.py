@@ -24,9 +24,13 @@ class PrinterSerializer(serializers.ModelSerializer):
         read_only_fields = ["last_error", "last_ok_at"]
 
     def get_queued(self, obj):
+        if hasattr(obj, "queued_n"):  # liste görünümünde toplu hesaplanır
+            return obj.queued_n
         return obj.jobs.filter(status__in=("queued", "printing")).count()
 
     def get_failed(self, obj):
+        if hasattr(obj, "failed_n"):
+            return obj.failed_n
         return obj.jobs.filter(status="failed").count()
 
     def validate(self, data):
@@ -63,6 +67,13 @@ class PrinterViewSet(TenantViewSet):
     perm_write = roles.PRINTERS_MANAGE
     perm_actions = {"test": roles.PRINTERS_MANAGE}
     ordering = ("name",)
+
+    def get_queryset(self):
+        from django.db.models import Count, Q
+
+        return super().get_queryset().annotate(
+            queued_n=Count("jobs", filter=Q(jobs__status__in=("queued", "printing")), distinct=True),
+            failed_n=Count("jobs", filter=Q(jobs__status="failed"), distinct=True)).prefetch_related("stations", "categories")
 
     @action(detail=True, methods=["post"])
     def test(self, request, pk=None):

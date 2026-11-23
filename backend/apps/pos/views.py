@@ -110,7 +110,7 @@ class FloorView(APIView):
         halls = Hall.objects.filter(branch=branch, is_active=True)
         tables = list(Table.objects.filter(branch=branch, is_active=True).select_related("hall"))
         tickets = {t.table_id: t for t in Ticket.objects.filter(branch=branch, status__in=ACTIVE_TICKET_STATES,
-                                                                table__isnull=False).select_related("waiter")}
+                                                                table__isnull=False).select_related("waiter").prefetch_related("batches", "lines")}
         reserved_ids = set()
         try:
             from apps.modules.models import Reservation
@@ -122,8 +122,8 @@ class FloorView(APIView):
                 starts_at__gte=now - timezone.timedelta(minutes=30)).values_list("table_id", flat=True))
         except Exception:
             pass
-        states = [table_state(t, tickets.get(t.id), reserved=t.id in reserved_ids) for t in tables]
-        others = Ticket.objects.filter(branch=branch, status__in=ACTIVE_TICKET_STATES, table__isnull=True)
+        states = [table_state(t, tickets.get(t.id), reserved=t.id in reserved_ids, lookup=False) for t in tables]
+        others = Ticket.objects.filter(branch=branch, status__in=ACTIVE_TICKET_STATES, table__isnull=True).select_related("table", "waiter", "customer", "customer_group")
         return Response({
             "halls": HallSerializer(halls, many=True).data,
             "tables": states,

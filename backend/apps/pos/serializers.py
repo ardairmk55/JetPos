@@ -10,16 +10,19 @@ TABLE_STATUS_LABELS = {
 }
 
 
-def table_state(table, ticket=None, reserved=None):
-    if ticket is None:
+def table_state(table, ticket=None, reserved=None, lookup=True):
+    """lookup=False: çağıran aktif adisyonları zaten topluca çekti (masa boşsa ek sorgu atma)."""
+    if ticket is None and lookup:
         ticket = Ticket.objects.filter(table=table, status__in=ACTIVE_TICKET_STATES).first()
     info = None
     status = "empty"
     if ticket:
-        pending = ticket.batches.filter(status="pending").exists()
-        ready = ticket.batches.filter(status="ready").count()
-        lines = ticket.lines.exclude(status="void")
-        drafts = lines.filter(status="draft").count()
+        # all() kullanılır: çağıran prefetch_related("batches", "lines") yaptıysa ek sorgu atılmaz
+        batches = list(ticket.batches.all())
+        pending = any(b.status == "pending" for b in batches)
+        ready = sum(1 for b in batches if b.status == "ready")
+        lines = [ln for ln in ticket.lines.all() if ln.status != "void"]
+        drafts = sum(1 for ln in lines if ln.status == "draft")
         if ticket.status == "paid":
             status = "paid"
         elif ticket.status == "bill_requested":

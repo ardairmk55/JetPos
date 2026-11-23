@@ -40,6 +40,8 @@ class CustomerSerializer(serializers.ModelSerializer):
         read_only_fields = ["visit_count", "total_spent", "last_visit", "anonymized_at", "consent_at"]
 
     def get_balance(self, obj):
+        if hasattr(obj, "debit_sum"):  # liste görünümünde toplu hesaplanır (N+1 yok)
+            return (obj.debit_sum or 0) - (obj.credit_sum or 0)
         return services.customer_balance(obj)
 
     def validate(self, data):
@@ -59,7 +61,10 @@ class CustomerViewSet(ModuleRequired, TenantViewSet):
     ordering = ("name",)
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        from django.db.models import Q, Sum
+
+        qs = super().get_queryset().annotate(debit_sum=Sum("account_entries__amount", filter=Q(account_entries__kind="debit")),
+                                            credit_sum=Sum("account_entries__amount", filter=Q(account_entries__kind="credit")))
         return qs if self.request.GET.get("all") == "1" else qs.filter(is_active=True)
 
     def retrieve(self, request, *args, **kwargs):
@@ -396,7 +401,8 @@ class FinanceEntrySerializer(serializers.ModelSerializer):
         read_only_fields = ["branch", "user", "reverses"]
 
     def get_reversed(self, obj):
-        return FinanceEntry.objects.filter(reverses=obj).exists()
+        # reversed_by tek-bir ilişkidir; liste select_related ile getirir (N+1 yok)
+        return hasattr(obj, "reversed_by")
 
     def validate_amount(self, v):
         if v <= 0:
@@ -433,7 +439,7 @@ class FinanceEntryViewSet(ModuleRequired, TenantViewSet):
 
     def get_queryset(self):
         d1, d2 = _range(self.request, 30)
-        return super().get_queryset().select_related("account").filter(date__gte=d1, date__lte=d2)
+        return super().get_queryset().select_related("account", "reversed_by").filter(date__gte=d1, date__lte=d2)
 
     def perform_create(self, serializer):
         obj = serializer.save(business=current_business(self.request), branch=current_branch(self.request),

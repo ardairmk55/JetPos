@@ -89,6 +89,20 @@ Durum işaretleri: ✅ çalışır ve test edildi · 🟡 kısmi / sınırlı ·
 | Kabuk/menü etiketlerinin İngilizcesi | ✅ | `i18n_en.js` +50 giriş |
 | Statik dosya önbellek sürümü (`?v=` = en yeni mtime) | ✅ | `apps/web/context.py` `ASSET_V`, `app.html`, `base.html` |
 
+### Kapsamlı test turu (2026-11-23, ikinci)
+| Kalem | Durum | Not |
+|---|---|---|
+| Kiracı izolasyonu (IDOR) — `tests/test_security_deep.py` (11 test) | ✅ | İşletme A kayıtları B'ye kopyalanır; A sahibi B'nin her detay rotasına GET/PATCH/DELETE/POST dener → 2xx yok. Çapraz kiracı FK enjeksiyonu reddedilir, listelerde yabancı satır yok |
+| Anonim erişim, CSRF, güvenlik başlıkları, çerez bayrakları, giriş hata mesajı, zayıf parola, toplu atama (rol yükseltme), saklı XSS | ✅ | Aynı dosya; hepsi geçti |
+| Sorgu bütçesi (N+1) — `tests/test_query_budget.py` | ✅ | 28 GET ucu, veri ~5-10× büyütülünce sorgu sayısı sabit. Bulunan N+1'ler düzeltildi: kat planı, müşteriler, finans kayıtları, yazıcılar |
+| Tam paket | ✅ | **85/85 geçti (63 sn)** |
+| Canlı yük testi (12 eşzamanlı oturum, 3840 istek) | ✅ | p50 75–416 ms, p95 157–545 ms. 403'ler (240) beklenen: kasiyer/garson `/api/kitchen` yetkisiz. Hız sınırı (varsayılan 600/dk/IP) yüksek yükte 429 verir — test sunucusunda yükseltildi |
+| Eşzamanlı yazma (10 masa aç-ekle-gönder-öde-kapat) | ✅ düzeltildi | Hata: SQLite `database is locked` → 500 (19 kez). Düzeltme: `settings.py` sqlite `transaction_mode=IMMEDIATE` + WAL. Sonuç: hatalı 0, log'da kilit/500 yok. Yedek `dumpdata` kullandığı için WAL güvenli |
+| Yarış: aynı `Idempotency-Key` ×10 | ✅ | Hepsi 201, ödenen = toplam (tek ödeme) |
+| Yarış: farklı anahtar ×10, aynı adisyon | ✅ | 1×201, 9×400, ödenen = toplam (çift ödeme yok) |
+| Erişilebilirlik taraması (31 sayfa: ad/etiket, alt, yinelenen id, h1, klavye, pozitif tabindex) | ✅ düzeltildi | Bulgu: 7 sayfada etiketsiz filtre alanı (tarih/durum/rapor). `app.js` `labelOrphans` ile TR/EN erişilebilir ad verildi; yeniden tarama: 0. Klavye Tab odak halkası doğrulandı |
+| Test EDİLMEDİ | ⛔ | Gerçek yazıcı/mali cihaz/banka POS, PostgreSQL altında eşzamanlılık (SQLite'ta `select_for_update` işlevsiz), Lighthouse/performans izi, çevrimdışı kuyruğun tarayıcıda ağ kesintisiyle denenmesi, ekran okuyucu |
+
 ## Dış bilgi / erişim gerektirenler (uydurulmadı)
 - Banka POS ve YN ÖKC marka/model entegrasyonları (yasal mali fiş) — cihaz/protokol dokümanı gerekli.
 - JET Menü mevcut API'si, SMTP sunucusu, mobil push (VAPID/FCM), SMS sağlayıcısı, bulut yedek hedefi,

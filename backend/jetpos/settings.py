@@ -102,7 +102,12 @@ DATABASES = {
     )
 }
 if DATABASES["default"]["ENGINE"].endswith("sqlite3"):
-    DATABASES["default"].setdefault("OPTIONS", {})["timeout"] = 20
+    # Eşzamanlı yazımda "database is locked" olmaması için: yazma işlemleri BEGIN IMMEDIATE ile başlar
+    # (okumadan yazmaya yükseltme kilitlenmesi yok) ve WAL ile okuyucular yazıcıyı bloklamaz.
+    DATABASES["default"].setdefault("OPTIONS", {}).update({
+        "timeout": 20, "transaction_mode": "IMMEDIATE",
+        "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;",
+    })
 
 CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
