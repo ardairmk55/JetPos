@@ -43,7 +43,9 @@ class RateLimitMiddleware:
             if path.startswith("/api/auth/login") or path.startswith("/api/auth/pin"):
                 if not _allow(f"login:{ip}", cfg["LOGIN_RATE_LIMIT_PER_MINUTE"]):
                     return JsonResponse({"detail": "Çok fazla deneme. Lütfen bekleyin.", "code": "rate_limited"}, status=429)
-            elif not _allow(f"api:{ip}", cfg["RATE_LIMIT_PER_MINUTE"]):
+            # Restorandaki tüm cihazlar internete tek IP'den çıkar: oturum açmış istekler kullanıcı başına sayılır
+            elif not _allow(f"api:u{request.user.pk}" if request.user.is_authenticated else f"api:{ip}",
+                            cfg["RATE_LIMIT_PER_MINUTE"]):
                 return JsonResponse({"detail": "İstek limiti aşıldı", "code": "rate_limited"}, status=429)
         return self.get_response(request)
 

@@ -13,7 +13,9 @@ TABLE_STATUS_LABELS = {
 def table_state(table, ticket=None, reserved=None, lookup=True):
     """lookup=False: çağıran aktif adisyonları zaten topluca çekti (masa boşsa ek sorgu atma)."""
     if ticket is None and lookup:
-        ticket = Ticket.objects.filter(table=table, status__in=ACTIVE_TICKET_STATES).first()
+        from .services import live_tickets
+
+        ticket = live_tickets(Ticket.objects.filter(table=table)).first()
     info = None
     status = "empty"
     if ticket:

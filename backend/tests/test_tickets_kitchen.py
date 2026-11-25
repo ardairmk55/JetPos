@@ -115,7 +115,9 @@ def test_table_move_and_merge(api, env):
     mc = api(env.manager)
     r = mc.post(f"/api/tickets/{t['id']}/move", {"table": env.tables[1].id}, format="json")
     assert r.status_code == 200 and r.json()["table"] == env.tables[1].id
-    _open(api, env, table=env.tables[2])
+    _, other = _open(api, env, table=env.tables[2])
+    # Boş açılış birleştirmeyi engellemez; üzerinde sipariş olan adisyon engeller
+    assert mc.post(f"/api/tickets/{other['id']}/add_line", {"product": env.ayran.id}, format="json").status_code == 201
     r = mc.post(f"/api/tables/{env.tables[1].id}/merge", {"table": env.tables[2].id}, format="json")
     assert r.status_code == 400 and r.json()["code"] == "ticket_merge_not_supported"
     assert mc.post(f"/api/tables/{env.tables[1].id}/merge", {"table": env.tables[3].id}, format="json").status_code == 200

@@ -234,6 +234,20 @@ class ReservationViewSet(ModuleRequired, TenantViewSet):
         obj = serializer.save(business=current_business(self.request), branch=current_branch(self.request),
                               created_by=self.request.user)
         audit.log("reservation.create", request=self.request, entity="Reservation", entity_id=obj.pk, after=obj)
+        self._refresh_floor()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        self._refresh_floor()
+
+    def perform_destroy(self, instance):
+        super().perform_destroy(instance)
+        self._refresh_floor()
+
+    def _refresh_floor(self):
+        from apps.pos.services import broadcast_floor
+
+        broadcast_floor(current_branch(self.request))
 
     @action(detail=True, methods=["post"])
     def seat(self, request, pk=None):
@@ -252,6 +266,7 @@ class ReservationViewSet(ModuleRequired, TenantViewSet):
         r.status = st
         r.save(update_fields=["status"])
         audit.log("reservation.status", request=request, entity="Reservation", entity_id=r.pk, after={"status": st})
+        self._refresh_floor()
         return Response(ReservationSerializer(r, context={"request": request}).data)
 
 

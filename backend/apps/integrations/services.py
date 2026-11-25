@@ -81,6 +81,7 @@ def receive_qr_order(business, *, external_id, table_token, items, note=""):
                                            external_id=str(external_id)[:80], items=norm, note=note[:300])
     except IntegrityError:
         return QrOrder.objects.get(business=business, external_id=str(external_id)[:80]), False
+    _refresh_floor(table.branch)
     if cfg.auto_accept_qr:
         accept_qr_order(order, user=None)
     else:
@@ -97,6 +98,9 @@ def accept_qr_order(order, *, user):
         raise BusinessError("Sipariş zaten işlenmiş")
     actor = user
     with transaction.atomic():
+        order = QrOrder.objects.select_for_update().get(pk=order.pk)
+        if order.status != "received":
+            raise BusinessError("Sipariş zaten işlenmiş")
         ticket, _ = pos.open_ticket(branch=order.branch, user=actor, table=order.table, source="qr")
         for i, it in enumerate(order.items):
             pos.add_line(ticket, user=actor, product_id=it["product"], qty=it["qty"], option_ids=it["options"],
@@ -105,14 +109,24 @@ def accept_qr_order(order, *, user):
         order.ticket = ticket
         order.decided_by = user
         order.save(update_fields=["status", "ticket", "decided_by"])
+    _refresh_floor(order.branch)
     return order
 
 
+def _refresh_floor(branch):
+    from apps.pos.services import broadcast_floor
+
+    broadcast_floor(branch)
+
+
 def reject_qr_order(order, *, user, reason=""):
+    if order.status != "received":
+        raise BusinessError("Sipariş zaten işlenmiş")
     order.status = "rejected"
     order.error = reason[:300]
     order.decided_by = user
     order.save(update_fields=["status", "error", "decided_by"])
+    _refresh_floor(order.branch)
     return order
 
 

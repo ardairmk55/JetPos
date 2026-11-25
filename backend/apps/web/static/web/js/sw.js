@@ -1,6 +1,6 @@
 /* POSHANE service worker — uygulama kabuğunu önbellekler; API çağrıları önbelleğe alınmaz.
    Ağ yokken sipariş işlemleri IndexedDB kuyruğunda (core.js) bekler ve "mutfağa ulaştı" gösterilmez. */
-const CACHE = "jetpos-shell-v4";
+const CACHE = "jetpos-shell-v5";
 const SHELL = ["/waiter", "/static/web/app.css", "/static/web/js/core.js", "/static/web/js/icons.js", "/static/web/js/i18n_en.js", "/static/web/js/ui.js", "/static/web/js/pages_pos.js",
   "/static/web/js/pages_mgmt.js", "/static/web/js/pages_admin.js", "/static/web/js/app.js", "/static/web/img/icon.svg", "/static/web/fonts/ibm-plex-sans-latin-400-normal.woff2", "/static/web/fonts/ibm-plex-sans-latin-500-normal.woff2", "/static/web/fonts/ibm-plex-sans-latin-600-normal.woff2",
   "/manifest.webmanifest"];

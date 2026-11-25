@@ -45,6 +45,9 @@ class BranchConsumer(AsyncJsonWebsocketConsumer):
 
     async def receive_json(self, content, **kwargs):
         if content.get("type") == "ping":
+            # Kanal katmanı grup üyeliğini 24 saat sonra düşürür; açık kalan KDS ekranı sessizce sağır kalmasın
+            for g in getattr(self, "groups_joined", []):
+                await self.channel_layer.group_add(g, self.channel_name)
             await self.send_json({"event": "pong"})
 
     async def push(self, message):

@@ -108,8 +108,7 @@
     qs("[data-r]", head).onclick = load;
     skeleton();
     await load();
-    const live = J.debounce(() => day === maxDay && load(), 1500);
-    const offs = [J.on("ws:table", live), J.on("ws:kitchen", live), J.on("ws:ready", live), J.on("theme", () => load())];
+    const offs = [J.live(["ws:table", "ws:kitchen", "ws:ready"], async () => { if (day === maxDay) await load(); }, 1500), J.on("theme", () => load())];
     return () => offs.forEach((f) => f());
   };
 
@@ -146,7 +145,7 @@
       } });
       if (J.can("floor.manage") || J.can("ticket.move")) {
         acts.push({ label: "Masa birleştir", run: async () => {
-          const v = await J.promptForm(`${tb.name} ile birleştir`, [{ name: "table", label: "Bağlanacak masa (boş olmalı)", type: "select", required: true, options: data.tables.filter((x) => x.id !== tb.id && !x.merged_into).map((x) => [x.id, x.name]) }]);
+          const v = await J.promptForm(`${tb.name} ile birleştir`, [{ name: "table", label: "Bağlanacak masa (boş olmalı)", type: "select", required: true, options: data.tables.filter((x) => !x.ticket && x.id !== tb.id && !x.merged_into).map((x) => [x.id, x.name]) }]);
           if (v) { await J.post(`tables/${tb.id}/merge`, v); J.toast("Masalar birleştirildi", "ok"); load(); }
         } });
         if (J.can("floor.manage")) acts.push({ label: "Masa QR kodu", run: async () => {
@@ -164,8 +163,9 @@
     const cardHtml = (tb) => {
       const [label] = STATUS[tb.status];
       const tk = tb.ticket;
+      const mergedInto = tb.merged_into && data.tables.find((x) => x.id === tb.merged_into);
       return `<div class="flex items-start gap-2"><div class="text-lg font-semibold flex-1 tnum">${esc(tb.name)}</div>${tk?.ready ? `<span class="badge pulse" style="background:var(--accent);color:var(--accent-ink)">${J.icon("bell-ring", 12)}${t("Hazır")} ${tk.ready}</span>` : ""}<span role="button" tabindex="0" class="muted rounded" style="padding:2px;margin:-2px -4px 0 0" data-menu aria-label="Masa işlemleri">${J.icon("ellipsis", 18)}</span></div>
-        <div class="st-text"><span class="dot"></span>${esc(t(label))}${tb.merged_into ? " · birleşik" : ""}</div>
+        <div class="st-text"><span class="dot"></span>${esc(t(label))}${tb.merged_into ? ` · ${mergedInto ? `Masa ${esc(mergedInto.name)} ile birleşik` : "birleşik"}` : ""}</div>
         ${tk ? `<div class="mt-auto pt-2"><div class="text-lg font-semibold tnum">${money(tk.total)}</div><div class="text-xs muted truncate">${esc(tk.waiter)} · ${tk.items} ürün · ${tk.minutes} dk${tk.drafts ? ` · ${tk.drafts} taslak` : ""}</div></div>` : `<div class="mt-auto text-xs faint">${tb.seats} kişilik</div>`}`;
     };
     const render = () => {
@@ -253,9 +253,7 @@
     });
     qs("[data-takeaway]", head)?.addEventListener("click", async () => { try { const tk = await J.post("tickets", { channel: "takeaway" }); J.go(`/ticket/${tk.id}`); } catch (e) { J.err(e); } });
     await load();
-    const offs = [J.on("ws:table", J.debounce(() => !editing && load().catch(() => {}), 400)),
-      J.on("ws:ready", J.debounce(() => !editing && load().catch(() => {}), 400))];
-    return () => offs.forEach((f) => f());
+    return J.live(["ws:table", "ws:ready", "ws:kitchen"], async () => { if (!editing) await load(); }, 400);
   };
 
   // ================================================================== ADİSYON
@@ -459,9 +457,9 @@
       const B = (label, cls, fn, cond = true, span = false) => { if (!cond) return; const b = h(`<button class="btn ${cls} ${span ? "col-span-2" : ""}">${label}</button>`); b.onclick = () => fn().catch(J.err); bar.appendChild(b); };
       const editable = ["open", "bill_requested"].includes(st);
       B(`${J.icon("send", 18)}${t("Mutfağa Gönder")}${drafts ? ` (${drafts})` : ""}`, "btn-primary btn-lg", () => send(), editable && J.can("ticket.send") && (drafts > 0), true);
-      B(`${J.icon("receipt", 16)}${t("Hesap iste")}`, "btn-ghost btn-lg", async () => { tk = await J.post(`tickets/${id}/request_bill`); J.toast("Hesap istendi; kasaya bildirildi", "ok"); renderTicket(); }, st === "open" && J.can("ticket.request_bill") && !drafts);
+      B(`${J.icon("receipt", 16)}${t("Hesap iste")}`, "btn-ghost btn-lg", async () => { tk = await J.post(`tickets/${id}/request_bill`); J.toast("Hesap istendi; kasaya bildirildi", "ok"); renderTicket(); }, st === "open" && J.can("ticket.request_bill") && !drafts && tk.lines.some((l) => l.status === "sent"));
       B(`${J.icon("wallet", 18)}${t("Öde")}`, "btn-dark btn-lg", () => payModal(), editable && J.can("payment.take") && Number(tk.remaining) > 0);
-      B(`${J.icon("circle-check", 18)}Masayı kapat`, "btn-ok btn-lg", async () => { if (!(await J.confirm("Masa boşaltıldı mı? Adisyon kapatılacak ve masa boşa çıkacak.", { ok: "Adisyonu kapat" }))) return; tk = await J.post(`tickets/${id}/close`); J.toast("Adisyon kapatıldı", "ok"); J.go("/floor"); }, (st === "paid" || (Number(tk.total) === 0 && tk.lines.some((l) => l.status === "void") && !drafts)) && (J.can("payment.take") || J.can("floor.manage")), true);
+      B(`${J.icon("circle-check", 18)}Masayı kapat`, "btn-ok btn-lg", async () => { if (!(await J.confirm("Masa boşaltıldı mı? Adisyon kapatılacak ve masa boşa çıkacak.", { ok: "Adisyonu kapat" }))) return; tk = await J.post(`tickets/${id}/close`); J.toast("Adisyon kapatıldı", "ok"); J.go("/floor"); }, (st === "paid" || (editable && Number(tk.total) === 0 && tk.lines.some((l) => l.status !== "draft") && !drafts)) && (J.can("payment.take") || J.can("floor.manage")), true);
       tcol.appendChild(bar);
       qs("[data-more]", tcol).onclick = moreMenu;
     };
@@ -625,15 +623,31 @@
     await loadMenu();
     renderTicket();
     if (innerWidth >= 1024) { tcol.classList.remove("hidden"); }
-    const reload = J.debounce(async () => { try { tk = await J.get(`tickets/${id}`); renderTicket(); } catch (e) {} }, 300);
+    let left = false, live = null;
+    const refresh = async () => {
+      const writes = J.state.writes;
+      const next = await J.get(`tickets/${id}`);
+      if (left) return;
+      if (writes !== J.state.writes) return live.poke(); // araya kendi işlemimiz girdi: cevap eski olabilir
+      const wasActive = ["open", "bill_requested", "paid"].includes(tk.status);
+      tk = next;
+      localStorage.setItem(`jet.ticket.${id}`, JSON.stringify(tk));
+      if (wasActive && ["closed", "cancelled"].includes(tk.status)) {
+        J.toast(`Adisyon #${tk.number} başka bir ekrandan ${tk.status === "closed" ? "kapatıldı" : "iptal edildi"}`, "info");
+        qs("#modal-root").innerHTML = "";
+        return J.go(J.state.isWaiterMode ? "/waiter" : "/floor");
+      }
+      renderTicket();
+    };
+    live = J.live([["ws:table", (d) => d.ticket === Number(id)], "queue-sent", "queue-failed"], refresh);
     const key = (e) => {
       if (qs("#modal-root").children.length) return;
       if (e.ctrlKey && e.key === "Enter") { e.preventDefault(); send().catch(J.err); }
       if (e.key === "F9") { e.preventDefault(); if (J.can("payment.take")) payModal().catch(J.err); }
     };
     document.addEventListener("keydown", key);
-    const offs = [J.on("ws:table", (d) => d.ticket === Number(id) && reload()), J.on("queue-sent", reload), J.on("queue-failed", reload), J.on("queue", () => renderTicket())];
-    return () => { document.removeEventListener("keydown", key); offs.forEach((f) => f()); main.classList.remove("page-bleed"); };
+    const offs = [live, J.on("queue", () => renderTicket())];
+    return () => { left = true; document.removeEventListener("keydown", key); offs.forEach((f) => f()); main.classList.remove("page-bleed"); };
   };
 
   // ================================================================== KDS
@@ -677,14 +691,19 @@
         grid.appendChild(card);
       });
     };
-    const load = async () => { orders = await J.get(`kitchen?${station ? "station=" + station : ""}${done ? "&done=1" : ""}`); render(); };
+    const load = async () => {
+      const query = `${station ? "station=" + station : ""}${done ? "&done=1" : ""}`;
+      const rows = await J.get(`kitchen?${query}`);
+      if (query !== `${station ? "station=" + station : ""}${done ? "&done=1" : ""}`) return; // filtre değişti
+      orders = rows; render();
+    };
     qs("[data-done]", head).onclick = (e) => { done = !done; e.target.classList.toggle("active", done); load(); };
     qs("[data-fs]", head).onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.());
     renderSt();
     await load();
-    const tick = setInterval(() => { orders.forEach((o) => (o.elapsed += 0)); load().catch(() => {}); }, 30000);
-    const offs = [J.on("ws:kitchen", (d) => { if (d.action === "new" || d.action === "void") J.beep(d.action === "void" ? [440, 0.3, 330, 0.3] : [660, 0.12, 990, 0.12]); load().catch(() => {}); })];
-    return () => { clearInterval(tick); offs.forEach((f) => f()); };
+    const offs = [J.live(["ws:kitchen", "ws:ready", "ws:table"], load),
+      J.on("ws:kitchen", (d) => { if (d.action === "new" || d.action === "void") J.beep(d.action === "void" ? [440, 0.3, 330, 0.3] : [660, 0.12, 990, 0.12]); })];
+    return () => offs.forEach((f) => f());
   };
 
   // ================================================================== HAZIR SİPARİŞLER
@@ -704,7 +723,7 @@
     };
     qs("[data-mine]", main).onclick = (e) => { mine = !mine; e.target.classList.toggle("active", mine); load(); };
     await load();
-    return J.on("ws:ready", () => load().catch(() => {}));
+    return J.live(["ws:ready", "ws:table"], load);
   };
 
   // ================================================================== ONAYLAR
@@ -728,7 +747,7 @@
     };
     qs("[data-s]", main).onchange = (e) => { status = e.target.value; load(); };
     await load();
-    return J.on("ws:notification", (n) => n.event === "approval_request" && load().catch(() => {}));
+    return J.live([["ws:notification", (n) => n.event.startsWith("approval")], "ws:table"], load);
   };
 
   // ================================================================== KASA / GÜN SONU
@@ -857,7 +876,6 @@
       render();
     };
     await load();
-    const offs = [J.on("ws:table", J.debounce(() => load().catch(() => {}), 400)), J.on("ws:ready", () => load().catch(() => {}))];
-    return () => { offs.forEach((f) => f()); };
+    return J.live(["ws:table", "ws:ready"], load);
   };
 })();

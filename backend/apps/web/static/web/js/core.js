@@ -1,7 +1,7 @@
 /* POSHANE istemci çekirdeği: API, i18n, offline kuyruk, WebSocket, ses. Harici kütüphane yok (LAN offline). */
 (function () {
   const J = (window.J = {});
-  J.state = { me: null, lang: "tr", ws: null, wsOk: false, online: navigator.onLine, listeners: {} };
+  J.state = { me: null, lang: "tr", ws: null, wsOk: false, online: navigator.onLine, listeners: {}, writes: 0 };
 
   // ------------------------------------------------------------------ yardımcılar
   J.esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -56,7 +56,14 @@
     let payload;
     if (body instanceof FormData) payload = body;
     else if (body !== undefined) { headers["Content-Type"] = "application/json"; payload = JSON.stringify(body); }
-    const res = await fetch("/api/" + url.replace(/^\/?(api\/)?/, ""), { method, headers, body: payload, credentials: "same-origin" });
+    const path = url.replace(/^\/?(api\/)?/, "");
+    // Masa/sipariş istekleri cevapsız kalırsa düğme sonsuza kadar "işlemde" kalmasın
+    const signal = /^(floor|tables|tickets|kitchen|ready-orders|qr-orders)\b/.test(path) && AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined;
+    // Canlı yenileme, araya yazma işlemi girdiyse eski cevabı ekrana basmasın
+    if (method !== "GET") J.state.writes++;
+    let res;
+    try { res = await fetch("/api/" + path, { method, headers, body: payload, credentials: "same-origin", signal }); }
+    finally { if (method !== "GET") J.state.writes++; }
     if (opts.raw) { if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => ({}))); return res; }
     const data = res.status === 204 ? null : await res.json().catch(() => ({}));
     if (res.status === 401 && !url.includes("auth/")) { location.href = "/login/?next=" + encodeURIComponent(location.pathname); throw new ApiError(401, data); }
@@ -95,7 +102,9 @@
             J.emit("queue-sent", item);
           } catch (e) {
             if (e instanceof ApiError) {
-              if (e.status === 409 && e.data?.code === "in_progress") continue;
+              // Geçici durumlar (sunucu yeniden başlıyor, kilit, oturum, limit): sipariş silinmez, sıra korunur
+              if ((e.status === 409 && e.data?.code === "in_progress") || [401, 408, 423, 429].includes(e.status)) break;
+              if (e.status >= 500 && (item.tries || 0) < 40) { await tx("readwrite", (s) => s.put({ ...item, tries: (item.tries || 0) + 1 })); break; }
               await J.queue.remove(item.id);
               J.toast(`${item.label || "İşlem"} gönderilemedi: ${e.data?.detail || e.status}`, "bad", 10000);
               J.emit("queue-failed", { item, error: e });
@@ -138,18 +147,79 @@
 
   // ------------------------------------------------------------------ WebSocket (yerel ağ canlı kanal)
   J.connectWS = () => {
-    let delay = 1000;
+    let delay = 1000, retry = null, pingedAt = 0, waitingSince = 0, syncedAt = Date.now();
+    const resync = () => {
+      if (J.qs("#lock")?.classList.contains("hidden") === false) return; // kilitliyken istek atılmaz
+      syncedAt = Date.now(); J.emit("resync");
+    };
+    // Eski soketi olaylarıyla birlikte bırakıp yenisini planlar (yarı açık bağlantıda onclose çok geç gelir)
+    const lost = (ws, wait = delay) => {
+      if (J.state.ws !== ws || !ws) return;
+      ws.onopen = ws.onclose = ws.onmessage = null;
+      try { ws.close(); } catch (e) {}
+      J.state.ws = null; J.state.wsOk = false; J.emit("net");
+      clearTimeout(retry); retry = setTimeout(open, wait);
+      delay = Math.min(delay * 2, 15000);
+    };
+    const ping = () => {
+      const ws = J.state.ws;
+      if (ws?.readyState !== 1) return;
+      pingedAt = Date.now(); waitingSince ||= pingedAt;
+      ws.send(JSON.stringify({ type: "ping" }));
+    };
     const open = () => {
+      clearTimeout(retry);
       const proto = location.protocol === "https:" ? "wss" : "ws";
       const ws = new WebSocket(`${proto}://${location.host}/ws/branch/?branch=${J.state.branch || ""}`);
-      J.state.ws = ws;
-      ws.onopen = () => { J.state.wsOk = true; delay = 1000; J.emit("net"); };
-      ws.onclose = () => { J.state.wsOk = false; J.emit("net"); setTimeout(open, delay); delay = Math.min(delay * 2, 15000); };
-      ws.onmessage = (m) => { try { const d = JSON.parse(m.data); J.emit("ws:" + d.event, d.data); J.emit("ws", d); } catch (e) {} };
-      clearInterval(J.state.pingT);
-      J.state.pingT = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: "ping" })); }, 25000);
+      J.state.ws = ws; waitingSince = Date.now();
+      // Her bağlanışta ekran yeniden okunur: kopukken kaçan olaylar böyle telafi edilir
+      ws.onopen = () => { J.state.wsOk = true; delay = 1000; waitingSince = 0; J.emit("net"); resync(); J.queue.flush(); };
+      ws.onclose = () => lost(ws);
+      ws.onmessage = (m) => {
+        waitingSince = 0;
+        try { const d = JSON.parse(m.data); if (d.event === "pong") return; J.emit("ws:" + d.event, d.data); J.emit("ws", d); } catch (e) {}
+      };
     };
+    clearInterval(J.state.pingT);
+    J.state.pingT = setInterval(() => {
+      const now = Date.now();
+      if (J.state.ws && waitingSince && now - waitingSince > 15000) lost(J.state.ws, 0); // cevap yok: bağlantı ölü
+      else if (now - pingedAt >= 10000) ping();
+      // Emniyet ağı: bağlantı yoksa sık, varsa seyrek olarak sunucudan tazele (süre/rezervasyon da güncellenir)
+      if (!document.hidden && now - syncedAt > (J.state.wsOk ? 30000 : 10000)) resync();
+    }, 3000);
+    // Uyuyan telefon/tablet geri geldiğinde beklemeden tazele ve bağlantıyı sına
+    const wake = () => {
+      if (document.hidden) return;
+      if (!J.state.ws) { delay = 1000; open(); }
+      else if (J.state.ws.readyState === 1) { ping(); waitingSince = Date.now() - 10000; }
+      resync();
+    };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("online", wake);
+    window.addEventListener("offline", () => lost(J.state.ws, 1000));
     open();
+  };
+
+  /** Ekranı canlı tutar: olay gelince ve yeniden bağlanınca load() çağırır. Çağrılar üst üste binmez;
+   *  böylece geç gelen eski cevap yeni durumun üzerine yazamaz. */
+  J.live = (events, load, ms = 300) => {
+    let timer = null, running = false, again = false, alive = true;
+    const run = async () => {
+      timer = null;
+      if (!alive) return;
+      if (running) { again = true; return; }
+      running = true;
+      try { await load(); } catch (e) {} finally { running = false; if (again) { again = false; poke(); } }
+    };
+    const poke = () => { if (alive && !timer) timer = setTimeout(run, ms); };
+    const offs = [...events, "resync"].map((ev) => {
+      const [name, match] = Array.isArray(ev) ? ev : [ev, null];
+      return J.on(name, (d) => (!match || match(d)) && poke());
+    });
+    const stop = () => { alive = false; clearTimeout(timer); offs.forEach((f) => f()); };
+    stop.poke = poke;
+    return stop;
   };
 
   // ------------------------------------------------------------------ toast

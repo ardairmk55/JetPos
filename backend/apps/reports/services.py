@@ -497,7 +497,9 @@ def dashboard(branch, user, day=None):
         cards["payments_cash"] = {"value": _r(pm.get("cash"))}
         cards["payments_card"] = {"value": _r(pm.get("card"))}
     if roles.has_perm(user, roles.FLOOR_VIEW):
-        active = Ticket.objects.filter(branch=branch, status__in=ACTIVE_TICKET_STATES)
+        from apps.pos.services import live_tickets
+
+        active = live_tickets(Ticket.objects.filter(branch=branch))
         cards["open_tickets"] = {"value": active.count(), "amount": _r(active.aggregate(s=Sum("total"))["s"])}
         cards["bill_requested"] = {"value": active.filter(status="bill_requested").count()}
         cards["active_tables"] = {"value": active.filter(table__isnull=False).values("table").distinct().count(),

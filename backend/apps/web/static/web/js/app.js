@@ -160,15 +160,17 @@
   };
 
   // ------------------------------------------------------------------ yönlendirme
-  let cleanup = null;
-  J.go = (path, replace = false) => { (replace ? history.replaceState : history.pushState).call(history, null, "", path); route(); };
+  let cleanup = null, routeSeq = 0;
+  J.go =(path, replace = false) => { (replace ? history.replaceState : history.pushState).call(history, null, "", path); route(); };
   const stateBox = (icon, title, text, action = "") => `<div class="card"><div class="empty"><div class="empty-ic">${J.icon(icon, 22)}</div><div class="empty-title">${esc(title)}</div><p>${esc(text)}</p>${action}</div></div>`;
   const route = async () => {
     const path = location.pathname.replace(/\/$/, "") || "/";
-    const main = qs("#main");
+    const seq = ++routeSeq;
     try { cleanup?.(); } catch (e) {}
     cleanup = null;
-    main.innerHTML = "";
+    // Her ekran kendi kabına çizer: yarıda bırakılan ekranın geç gelen cevabı yenisine karışmaz
+    const main = qs("#main").cloneNode(false);
+    qs("#main").replaceWith(main);
     main.className = "page";
     closeDrawer();
     let hit = null;
@@ -182,8 +184,11 @@
     main.innerHTML = `<div class="space-y-3" aria-busy="true"><div class="skeleton" style="height:28px;width:220px"></div><div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:220px"></div></div>`;
     try {
       main.innerHTML = "";
-      cleanup = (await J.pages[hit[0]](main, hit[1])) || null;
+      const off = (await J.pages[hit[0]](main, hit[1])) || null;
+      if (seq !== routeSeq) { off?.(); return; } // bu arada başka ekrana geçildi: dinleyiciler açık kalmasın
+      cleanup = off;
     } catch (e) {
+      if (seq !== routeSeq) return;
       main.innerHTML = stateBox("triangle-alert", "Ekran yüklenemedi", e?.data?.detail || (navigator.onLine ? "Sunucuya ulaşılamadı. Bağlantıyı kontrol edip yeniden deneyin." : "İnternet/yerel ağ bağlantısı yok."), `<button class="btn btn-primary mt-2" onclick="location.reload()">Yeniden dene</button>`);
       if (!(e instanceof J.ApiError)) console.error(e);
     }
@@ -268,11 +273,11 @@
       try {
         if (selected === J.state.me.id && !switchMode) await J.post("auth/unlock", { pin });
         else { if (!selected) throw new J.ApiError(400, { detail: "Önce personel seçin" }); await J.post("auth/pin-switch", { user_id: selected, pin }); location.reload(); return; }
-        lock.classList.add("hidden"); lock.innerHTML = ""; lastAct = Date.now();
+        lock.classList.add("hidden"); lock.innerHTML = ""; lastAct = Date.now(); J.emit("resync");
       } catch (e) { qs("[data-err]", box).textContent = e.data?.detail || "Hata"; pad.reset(); }
     }, { title: "PIN" });
     qs("[data-pad]", box).appendChild(pad);
-    qs("[data-pw]", box).onclick = async () => { const v = await J.promptForm("Şifre ile kilidi aç", [{ name: "password", label: "Şifre", type: "password", required: true }]); if (v) { try { await J.post("auth/unlock", v); lock.classList.add("hidden"); lastAct = Date.now(); } catch (e) { J.err(e); } } };
+    qs("[data-pw]", box).onclick = async () => { const v = await J.promptForm("Şifre ile kilidi aç", [{ name: "password", label: "Şifre", type: "password", required: true }]); if (v) { try { await J.post("auth/unlock", v); lock.classList.add("hidden"); lastAct = Date.now(); J.emit("resync"); } catch (e) { J.err(e); } } };
     qs("[data-out]", box).onclick = async () => { await J.post("auth/logout").catch(() => {}); location.href = "/login/"; };
     lock.appendChild(box);
     lock.classList.remove("hidden");

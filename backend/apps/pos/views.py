@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -25,7 +26,30 @@ def _approver(request):
     return a if isinstance(a, dict) and a else None
 
 
-class HallViewSet(TenantViewSet):
+def _remove_tables(tables, user):
+    """Üzerinde işlem süren masa silinemez; boş açılışlar ve birleştirme bağları temizlenir."""
+    busy = services.live_tickets(Ticket.objects.filter(table__in=tables)).select_related("table").first()
+    if busy:
+        raise BusinessError(f"Masa {busy.table.name} üzerinde açık adisyon var; önce kapatın veya taşıyın",
+                            code="table_busy")
+    for t in tables:
+        services.discard_blank_ticket(t, user=user)
+    Table.objects.filter(merged_into__in=tables).update(merged_into=None)
+
+
+class LiveFloorViewSet(TenantViewSet):
+    """Salon/masa tanımı değişince diğer cihazların plan ekranı da yenilenir."""
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        services.broadcast_floor(current_branch(self.request))
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        services.broadcast_floor(current_branch(self.request))
+
+
+class HallViewSet(LiveFloorViewSet):
     queryset = Hall.objects.all()
     serializer_class = HallSerializer
     perm_read = roles.FLOOR_VIEW
@@ -35,8 +59,16 @@ class HallViewSet(TenantViewSet):
     def get_queryset(self):
         return super().get_queryset().filter(is_active=True)
 
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        tables = list(Table.objects.filter(hall=instance, is_active=True))
+        _remove_tables(tables, self.request.user)
+        Table.objects.filter(pk__in=[t.pk for t in tables]).update(is_active=False, merged_into=None)
+        super().perform_destroy(instance)
+        services.broadcast_floor(current_branch(self.request))
 
-class TableViewSet(TenantViewSet):
+
+class TableViewSet(LiveFloorViewSet):
     queryset = Table.objects.all()
     serializer_class = TableSerializer
     perm_read = roles.FLOOR_VIEW
@@ -48,6 +80,14 @@ class TableViewSet(TenantViewSet):
 
     def get_queryset(self):
         return super().get_queryset().filter(is_active=True)
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        _remove_tables([instance], self.request.user)
+        instance.merged_into = None
+        instance.save(update_fields=["merged_into"])
+        super().perform_destroy(instance)
+        services.broadcast_floor(current_branch(self.request))
 
     @action(detail=False, methods=["post"])
     def layout(self, request):
@@ -63,6 +103,7 @@ class TableViewSet(TenantViewSet):
                 t.save(update_fields=["x", "y", "w", "h"])
                 n += 1
         audit.log("floor.layout", request=request, entity="Hall", after={"tables": n})
+        services.broadcast_floor(branch)
         return Response({"updated": n})
 
     @action(detail=True, methods=["post"])
@@ -109,8 +150,8 @@ class FloorView(APIView):
         branch = current_branch(request)
         halls = Hall.objects.filter(branch=branch, is_active=True)
         tables = list(Table.objects.filter(branch=branch, is_active=True).select_related("hall"))
-        tickets = {t.table_id: t for t in Ticket.objects.filter(branch=branch, status__in=ACTIVE_TICKET_STATES,
-                                                                table__isnull=False).select_related("waiter").prefetch_related("batches", "lines")}
+        tickets = {t.table_id: t for t in services.live_tickets(
+            Ticket.objects.filter(branch=branch, table__isnull=False)).select_related("waiter").prefetch_related("batches", "lines")}
         reserved_ids = set()
         try:
             from apps.modules.models import Reservation
@@ -123,7 +164,8 @@ class FloorView(APIView):
         except Exception:
             pass
         states = [table_state(t, tickets.get(t.id), reserved=t.id in reserved_ids, lookup=False) for t in tables]
-        others = Ticket.objects.filter(branch=branch, status__in=ACTIVE_TICKET_STATES, table__isnull=True).select_related("table", "waiter", "customer", "customer_group")
+        others = services.live_tickets(Ticket.objects.filter(branch=branch, table__isnull=True)).select_related(
+            "table", "waiter", "customer", "customer_group")
         return Response({
             "halls": HallSerializer(halls, many=True).data,
             "tables": states,
@@ -157,6 +199,8 @@ class TicketViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(business_date=g["date"])
         if g.get("number"):
             qs = qs.filter(number=g["number"])
+        if self.action == "list":
+            qs = qs.exclude(pk__in=services.blank_tickets().values("pk"))
         return limit_list(self, qs, 300)
 
     def get_serializer_class(self):
@@ -279,6 +323,7 @@ class TicketViewSet(viewsets.ReadOnlyModelViewSet):
         t.customer = c
         t.save(update_fields=["customer"])
         audit.log("ticket.customer", request=request, entity="Ticket", entity_id=t.pk, after={"customer": c.name if c else None})
+        services.broadcast_table(t)
         return self._detail(t)
 
     @action(detail=True, methods=["post"])

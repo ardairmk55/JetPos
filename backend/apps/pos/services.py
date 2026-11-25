@@ -88,7 +88,43 @@ def broadcast_table(ticket_or_table):
     broadcast(branch_group(branch.id), "table", data)
 
 
+def broadcast_floor(branch):
+    """Masaya bağlı olmayan plan değişiklikleri (salon/masa, rezervasyon, QR kuyruğu)."""
+    broadcast(branch_group(branch.id), "table", {"table": None})
+
+
 # ---------------------------------------------------------------- adisyon
+def blank_tickets():
+    """Masaya dokunulmuş ama hiçbir işlem yapılmamış adisyonlar.
+
+    Bunlar masayı "dolu" göstermez, sayaçlara girmez ve taşıma/birleştirme/rezervasyonu engellemez.
+    """
+    return Ticket.objects.filter(
+        status="open", source="pos", channel__in=("table", "takeaway"), reservation__isnull=True,
+        customer__isnull=True, customer_group__isnull=True, lines__isnull=True, payments__isnull=True,
+        batches__isnull=True, discounts__isnull=True, approvals__isnull=True)
+
+
+def live_tickets(qs):
+    """Gerçekten devam eden adisyonlar."""
+    return qs.filter(status__in=ACTIVE_TICKET_STATES).exclude(pk__in=blank_tickets().values("pk"))
+
+
+def discard_blank_ticket(table, *, user):
+    for t in Ticket.objects.filter(pk__in=blank_tickets().filter(table=table).values("pk")):
+        t.status = "cancelled"
+        t.closed_at = timezone.now()
+        t.closed_by = user
+        t.save(update_fields=["status", "closed_at", "closed_by"])
+        audit.log("ticket.cancel", user=user, business=t.business, branch=t.branch, entity="Ticket", entity_id=t.pk,
+                  after={"blank": True})
+        broadcast_table(t)
+
+
+def _lock_ticket(pk):
+    return Ticket.objects.select_for_update().get(pk=pk)
+
+
 def open_ticket(*, branch, user, table=None, channel="table", guest_count=1, customer=None, source="pos"):
     if table is not None:
         if table.branch_id != branch.id or not table.is_active:
@@ -99,6 +135,12 @@ def open_ticket(*, branch, user, table=None, channel="table", guest_count=1, cus
             return existing, False
     elif channel == "table":
         raise BusinessError("Masa seçilmeli")
+    elif channel == "takeaway" and customer is None and source == "pos":
+        # Boş kalan gel-al adisyonu yeniden kullanılır; her dokunuşta yenisi birikmez
+        spare = Ticket.objects.filter(pk__in=blank_tickets().filter(
+            branch=branch, channel="takeaway", waiter=user).values("pk")).first()
+        if spare:
+            return spare, False
     try:
         with transaction.atomic():
             t = Ticket.objects.create(
@@ -164,6 +206,14 @@ def add_line(ticket, *, user, product_id, qty=1, option_ids=None, note="", seat=
         chosen = _validate_options(product, option_ids)
         base = resolve_price(product, branch=ticket.branch, channel=ticket.channel, customer_group=ticket.customer_group)
         unit = money(base + sum(Decimal(c["price"]) for c in chosen))
+        if blank_tickets().filter(pk=ticket.pk).exists():
+            # İlk gerçek işlem: süre, personel ve iş günü eski boş açılıştan devralınmaz
+            ticket.opened_at = timezone.now()
+            ticket.waiter = user or ticket.waiter
+            if ticket.business_date != timezone.localdate():
+                ticket.business_date = timezone.localdate()
+                ticket.number = next_number(ticket.branch)
+            ticket.save(update_fields=["opened_at", "waiter", "business_date", "number"])
         line = TicketLine.objects.create(
             ticket=ticket, product=product, name=product.name, qty=qty, base_price=base, unit_price=unit,
             options=chosen, note=(note or "")[:300], tax_rate=product.effective_tax(),
@@ -179,8 +229,19 @@ def add_line(ticket, *, user, product_id, qty=1, option_ids=None, note="", seat=
     return line, True
 
 
+def _lock_line(line):
+    """Adisyonu ve satırı kilitleyip güncel halini döndürür (başka cihazın değişikliği ezilmesin)."""
+    ticket = _lock_ticket(line.ticket_id)
+    fresh = TicketLine.objects.select_for_update().filter(pk=line.pk).first()
+    if fresh is None:
+        raise BusinessError("Satır başka bir cihazdan silinmiş", code="line_gone")
+    fresh.ticket = ticket
+    return fresh, ticket
+
+
+@transaction.atomic
 def update_line(line, *, user, qty=None, note=None, option_ids=None, seat="__keep__"):
-    ticket = line.ticket
+    line, ticket = _lock_line(line)
     if line.status != "draft":
         # Gönderilmiş ürün sessizce değiştirilemez (§5.4); yalnızca kişi ataması (hesap bölme) yapılabilir
         if qty is not None or note is not None or option_ids is not None:
@@ -208,10 +269,11 @@ def update_line(line, *, user, qty=None, note=None, option_ids=None, seat="__kee
     return line
 
 
+@transaction.atomic
 def delete_draft_line(line, *, user):
+    line, ticket = _lock_line(line)
     if line.status != "draft":
         raise BusinessError("Yalnızca taslak ürün silinebilir; gönderilmiş ürün için iptal kullanın", code="line_sent")
-    ticket = line.ticket
     _ensure_editable(ticket)
     line.delete()
     recalc(ticket)
@@ -342,9 +404,10 @@ def send_to_kitchen(ticket, *, user, confirmed=False):
 def kitchen_start(order, *, user):
     from apps.inventory.services import deduct_for_lines
 
-    if order.status != "new":
-        return order
     with transaction.atomic():
+        order = KitchenOrder.objects.select_for_update().get(pk=order.pk)
+        if order.status != "new":
+            return order
         order.status = "preparing"
         order.started_at = timezone.now()
         order.save(update_fields=["status", "started_at"])
@@ -403,7 +466,11 @@ def _maybe_batch_ready(batch, user):
     return batch
 
 
+@transaction.atomic
 def pickup_batch(batch, *, user):
+    batch = KitchenBatch.objects.select_for_update().get(pk=batch.pk)
+    if batch.status == "picked_up":
+        return batch  # iki cihaz aynı anda "teslim aldım" derse ikincisi hata görmez
     if batch.status != "ready":
         raise BusinessError("Sipariş henüz hazır değil")
     batch.status = "picked_up"
@@ -472,7 +539,7 @@ def void_line(line, *, user, reason, qty=None, approver=None, approved_by=None):
         from apps.printing.services import enqueue_void
 
         enqueue_void(void)
-        _maybe_resolve_batch_after_void(void)
+        _maybe_resolve_batch_after_void(void, user)
     if void.station_id:
         notify(branch=ticket.branch, event="kitchen_void", title=f"İPTAL: {void.name} x{qty}",
                body=f"Adisyon #{ticket.number} — {reason}", priority="high", roles=[roles.KITCHEN], sound=True,
@@ -482,18 +549,25 @@ def void_line(line, *, user, reason, qty=None, approver=None, approved_by=None):
     return void
 
 
-def _maybe_resolve_batch_after_void(void):
-    batch = void.batch
-    if not batch or batch.status != "pending":
+def _maybe_resolve_batch_after_void(void, user):
+    if not void.batch_id:
         return
-    for o in batch.orders.all():
-        if not batch.lines.filter(station=o.station, status="sent").exists() and o.status != "ready":
+    batch = KitchenBatch.objects.select_for_update().get(pk=void.batch_id)
+    if batch.status == "picked_up":
+        return
+    sent = batch.lines.filter(status="sent")
+    for o in batch.orders.exclude(status="ready"):
+        if not sent.filter(station=o.station).exists():
             o.status = "ready"
             o.ready_at = timezone.now()
             o.save(update_fields=["status", "ready_at"])
-    if not batch.lines.filter(status="sent").exists():
+    if not sent.exists():
+        # Partide ürün kalmadı: mutfakta da "hazır" listesinde de beklememeli
         batch.status = "picked_up"
         batch.save(update_fields=["status"])
+        broadcast(branch_group(batch.ticket.branch_id), "ready", {"batch": batch.id, "action": "picked_up"})
+    elif batch.status == "pending" and not batch.orders.exclude(status="ready").exists():
+        _maybe_batch_ready(batch, user)
 
 
 def apply_discount(ticket, *, user, kind, value, reason, approver=None, approved_by=None):
@@ -530,7 +604,13 @@ def apply_discount(ticket, *, user, kind, value, reason, approver=None, approved
 def reverse_discount(discount, *, user, reason, approver=None):
     reason = _require_reason(reason)
     approved_by = authorize(user, roles.TICKET_DISCOUNT, approver)
-    ticket = discount.ticket
+    with transaction.atomic():
+        return _reverse_discount_locked(discount, user=user, approved_by=approved_by, reason=reason)
+
+
+def _reverse_discount_locked(discount, *, user, approved_by, reason):
+    ticket = _lock_ticket(discount.ticket_id)
+    discount = TicketDiscount.objects.select_for_update().get(pk=discount.pk)
     _ensure_editable(ticket)
     if discount.reversed_at:
         raise BusinessError("İndirim zaten geri alınmış")
@@ -564,6 +644,7 @@ def request_customer_group(ticket, *, user, group, reason=""):
            data={"approval": req.id, "ticket": ticket.id})
     audit.log("approval.request", user=user, business=ticket.business, branch=ticket.branch, entity="ApprovalRequest",
               entity_id=req.pk, after=req.payload)
+    broadcast_table(ticket)
     return req
 
 
@@ -596,6 +677,7 @@ def request_approval(*, ticket, user, kind, payload, reason, perm):
            roles=[roles.BRANCH_MANAGER, roles.OWNER], sound=True, data={"approval": req.id, "ticket": ticket.id})
     audit.log("approval.request", user=user, business=ticket.business, branch=ticket.branch, entity="ApprovalRequest",
               entity_id=req.pk, after=payload, reason=reason)
+    broadcast_table(ticket)
     return req
 
 
@@ -607,6 +689,9 @@ def decide_approval(req, *, user, approve, note=""):
     if req.requested_by_id == user.id:
         raise BusinessError("Kendi talebinizi onaylayamazsınız", code="forbidden", status_code=403)
     with transaction.atomic():
+        # İki yönetici aynı anda onaylarsa indirim/iade iki kez uygulanmamalı
+        if ApprovalRequest.objects.select_for_update().get(pk=req.pk).status != "pending":
+            raise BusinessError("Talep zaten sonuçlandırılmış")
         result = None
         if approve:
             p = req.payload
@@ -640,10 +725,16 @@ def decide_approval(req, *, user, approve, note=""):
 
 
 # ---------------------------------------------------------------- masa işlemleri
+@transaction.atomic
 def request_bill(ticket, *, user):
+    ticket = _lock_ticket(ticket.pk)
     _ensure_editable(ticket)
+    if ticket.status == "bill_requested":
+        return ticket
     if ticket.lines.filter(status="draft").exists():
         raise BusinessError("Önce taslak ürünleri mutfağa gönderin veya silin", code="drafts_pending")
+    if not ticket.lines.filter(status="sent").exists():
+        raise BusinessError("Adisyonda hesaplanacak ürün yok", code="nothing_due")
     ticket.status = "bill_requested"
     ticket.bill_requested_at = timezone.now()
     ticket.save(update_fields=["status", "bill_requested_at"])
@@ -659,13 +750,18 @@ def request_bill(ticket, *, user):
     return ticket
 
 
+@transaction.atomic
 def move_ticket(ticket, *, user, target):
+    ticket = _lock_ticket(ticket.pk)
     if not ticket.is_active or ticket.table is None:
         raise BusinessError("Taşınabilir aktif masa adisyonu yok")
     target = primary_table(target)
-    if target.branch_id != ticket.branch_id:
-        raise BusinessError("Hedef masa farklı şubede")
+    if target.branch_id != ticket.branch_id or not target.is_active:
+        raise BusinessError("Hedef masa farklı şubede veya pasif")
     old = ticket.table
+    if target.pk == old.pk:
+        return ticket
+    discard_blank_ticket(target, user=user)
     try:
         with transaction.atomic():
             ticket.table = target
@@ -685,6 +781,9 @@ def merge_tables(primary, secondary, *, user):
     if primary.id == secondary.id or primary.branch_id != secondary.branch_id:
         raise BusinessError("Geçersiz masa seçimi")
     primary = primary_table(primary)
+    if primary.id == secondary.id:
+        raise BusinessError("Bu masalar zaten birleşik")
+    discard_blank_ticket(secondary, user=user)
     if Ticket.objects.filter(table=secondary, status__in=ACTIVE_TICKET_STATES).exists():
         raise BusinessError("Birleştirilecek masada açık adisyon var. Adisyon birleştirme kapsam dışıdır; "
                             "önce adisyonu taşıyın veya kapatın.", code="ticket_merge_not_supported")
@@ -723,6 +822,7 @@ def close_ticket(ticket, *, user, auto=False):
         ticket.closed_at = timezone.now()
         ticket.closed_by = user
         ticket.save(update_fields=["status", "closed_at", "closed_by"])
+        _settle_leftovers(ticket, user=user, table_cleared=not auto)
         audit.log("ticket.close", user=user, business=ticket.business, branch=ticket.branch, entity="Ticket",
                   entity_id=ticket.pk, after={"status": ticket.status, "auto": auto, "total": str(ticket.total)})
         emit_sync(ticket.branch, "ticket.closed", {"ticket": ticket.id, "number": ticket.number,
@@ -735,7 +835,28 @@ def close_ticket(ticket, *, user, auto=False):
     return ticket
 
 
+def _settle_leftovers(ticket, *, user, table_cleared):
+    """Kapanan adisyona bağlı bekleyen işler askıda kalmasın."""
+    now = timezone.now()
+    ticket.approvals.filter(status="pending").exclude(kind="refund").update(
+        status="rejected", decided_at=now, decision_note="Adisyon kapandığı için otomatik kapatıldı")
+    if ticket.reservation_id:
+        from apps.modules.models import Reservation
+
+        Reservation.objects.filter(pk=ticket.reservation_id, status="seated").update(status="completed")
+    # Ödemeyle otomatik kapanışta (ör. peşin gel-al) sipariş hâlâ teslim bekliyor olabilir
+    if table_cleared and ticket.batches.filter(status="ready").update(
+            status="picked_up", picked_up_at=now, picked_up_by=user):
+        broadcast(branch_group(ticket.branch_id), "ready", {"ticket": ticket.id, "action": "picked_up"})
+
+
+@transaction.atomic
 def cancel_empty_ticket(ticket, *, user):
+    ticket = _lock_ticket(ticket.pk)
+    if ticket.status == "cancelled":
+        return ticket
+    if ticket.status == "closed":
+        raise BusinessError("Kapanmış adisyon iptal edilemez")
     if ticket.lines.exclude(status="draft").exists() or ticket.payments.exists():
         raise BusinessError("Gönderilmiş ürün veya ödeme içeren adisyon iptal edilemez; ürünleri gerekçeli iptal edin")
     ticket.lines.all().delete()
@@ -743,6 +864,7 @@ def cancel_empty_ticket(ticket, *, user):
     ticket.closed_at = timezone.now()
     ticket.closed_by = user
     ticket.save(update_fields=["status", "closed_at", "closed_by"])
+    _settle_leftovers(ticket, user=user, table_cleared=True)
     audit.log("ticket.cancel", user=user, business=ticket.business, branch=ticket.branch, entity="Ticket", entity_id=ticket.pk)
     broadcast_table(ticket)
     return ticket
@@ -972,7 +1094,7 @@ def build_day_report(day):
         "refunds": str(money(refunds_total)),
         "net_collections": str(money(gross_sales - refunds_total)),
         "tickets_closed": tickets.filter(status="closed").count(),
-        "tickets_open": tickets.filter(status__in=ACTIVE_TICKET_STATES).count(),
+        "tickets_open": live_tickets(tickets).count(),
         "tickets_cancelled": tickets.filter(status="cancelled").count(),
         "discount_total": str(money(tickets.aggregate(s=Sum("discount_total"))["s"] or ZERO)),
         "campaign_discount_total": str(money(tickets.aggregate(s=Sum("campaign_discount"))["s"] or ZERO)),

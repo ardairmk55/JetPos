@@ -112,6 +112,24 @@ Durum işaretleri: ✅ çalışır ve test edildi · 🟡 kısmi / sınırlı ·
   çok istasyonlu KDS tamamlama kuralı, senkronizasyon çakışma protokolü, talep yeniden açma süresi.
   Bu değerler kodda sabitlenmedi; ilgili ekranlarda yönetici tarafından girilir.
 
+## Masa durumu ve canlı veri düzeltmesi (2026-11-25)
+Tam paket **121/121 geçti** (yeni `tests/test_floor_state.py`, 18 test; 17'si düzeltmeden önce başarısızdı).
+
+- Davranış değişikliği: masaya dokunmak masayı artık "Dolu" yapmaz. Hiç işlem görmemiş adisyon boş sayılır
+  (`blank_tickets`); sayaçlara ve listelere girmez; taşıma, birleştirme ve rezervasyonu engellemez.
+  `test_table_move_and_merge` buna göre güncellendi.
+- Düzeltildi: iptalden sonra takılan mutfak partisi, boş adisyonda hesap isteme, %100 indirimli masanın
+  ekrandan kapatılamaması, kapanan adisyonda askıda kalan onay/hazır sipariş/rezervasyon, eşzamanlı işlemde
+  eski verinin yenisini ezmesi, birleştirme döngüsü, açık adisyonlu masa/salon silme, yarıda kalan isteğin
+  sonsuza kadar "işleniyor" kalması.
+- Canlı veri: yeniden bağlanınca ekran tazelenir, ölü soket algılanır, 24 saat sonra düşen kanal üyeliği
+  yenilenir, bağlantı yokken periyodik okuma yapılır, geçici sunucu hatasında kuyruktaki sipariş silinmez,
+  istek limiti oturum açmış kullanıcıda IP yerine kullanıcı başınadır.
+- Tarayıcıda yerelde denendi: iki sekme arası canlı güncelleme, yarı açık soket (25 sn'de yeniden bağlandı),
+  soket yokken tazeleme, masaya dokunup geri çıkma, uzaktan iptal, masa ekranlarının hatasız açılması.
+- Denenmedi: gerçek telefon/tablet, zayıf Wi-Fi, çok cihazlı yoğun yük, canlı sunucu (henüz yayınlanmadı),
+  çevrimdışı kuyruğun tarayıcıda yeniden gönderimi.
+
 ## Dosya haritası
 `backend/` Django projesi · `backend/tests/` testler · `frontend/` Tailwind kaynakları · `desktop/` Electron ·
 `installer/` kurulum/başlatma/güncelleme betikleri · `docs/` kılavuzlar.

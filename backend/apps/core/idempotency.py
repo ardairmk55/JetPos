@@ -1,15 +1,20 @@
 """Idempotency (NFR-02): Aynı `Idempotency-Key` ile gelen tekrar istek ikinci kayıt üretmez."""
 import functools
 import json
+from datetime import timedelta
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework.response import Response
 
 from .models import IdempotencyRecord
 from .tenancy import current_business
 
 IN_PROGRESS = 0
+# İşlem ve sonuç kaydı tek transaction'da yazılır: bu süreden eski "işleniyor" kaydı yarıda kesilmiş
+# (sunucu yeniden başlamış) demektir, hiçbir şey kaydedilmemiştir ve yeniden denenebilir.
+STALE_AFTER = timedelta(minutes=2)
 
 
 def get_key(request):
@@ -30,6 +35,8 @@ def idempotent(scope, required=True):
                 return fn(self, request, *args, **kwargs)
             biz = current_business(request)
             full_scope = f"{scope}:{kwargs.get('pk', '')}"
+            IdempotencyRecord.objects.filter(business=biz, scope=full_scope, key=key, status_code=IN_PROGRESS,
+                                             created_at__lt=timezone.now() - STALE_AFTER).delete()
             try:
                 with transaction.atomic():
                     rec = IdempotencyRecord.objects.create(
@@ -44,16 +51,17 @@ def idempotent(scope, required=True):
                 resp["Idempotent-Replay"] = "true"
                 return resp
             try:
-                resp = fn(self, request, *args, **kwargs)
+                with transaction.atomic():
+                    resp = fn(self, request, *args, **kwargs)
+                    if resp.status_code < 400:
+                        data = json.loads(json.dumps(resp.data, cls=DjangoJSONEncoder))
+                        IdempotencyRecord.objects.filter(pk=rec.pk).update(status_code=resp.status_code, response=data)
             except Exception:
                 rec.delete()
                 raise
             if resp.status_code >= 400:
                 # Başarısız işlem tekrar denenebilsin
                 rec.delete()
-                return resp
-            data = json.loads(json.dumps(resp.data, cls=DjangoJSONEncoder))
-            IdempotencyRecord.objects.filter(pk=rec.pk).update(status_code=resp.status_code, response=data)
             return resp
 
         return wrapper

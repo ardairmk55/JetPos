@@ -205,12 +205,13 @@ def validate_reservation(res):
 
 
 def seat_reservation(res, *, user):
-    from apps.pos.services import open_ticket
+    from apps.pos.services import broadcast_table, discard_blank_ticket, open_ticket, primary_table
 
     if res.status not in ("pending", "confirmed", "waitlist"):
         raise BusinessError("Rezervasyon masaya alınamaz")
     if not res.table_id:
         raise BusinessError("Önce masa atayın")
+    discard_blank_ticket(primary_table(res.table), user=user)
     ticket, created = open_ticket(branch=res.branch, user=user, table=res.table, guest_count=res.party_size,
                                   customer=res.customer)
     if not created:
@@ -219,6 +220,7 @@ def seat_reservation(res, *, user):
     ticket.save(update_fields=["reservation"])
     res.status = "seated"
     res.save(update_fields=["status"])
+    broadcast_table(ticket)  # rezervasyon bağlandı: masa artık dolu
     audit.log("reservation.seat", user=user, business=res.business, branch=res.branch, entity="Reservation",
               entity_id=res.pk, after={"ticket": ticket.id})
     return ticket
