@@ -49,4 +49,17 @@ HTTPS çalıştığını doğruladıktan sonra `.env` içinde `JETPOS_HSTS_SECON
 ## Bilinen sınırlar
 - Tek sunucu ve tek `app` süreci için tasarlandı (WebSocket katmanı bellek içi). Birden fazla süreç için Redis gerekir.
 - Veritabanı varsayılan SQLite (WAL). Yoğun çok şubeli kullanım için `DATABASE_URL` ile PostgreSQL önerilir; PostgreSQL altında eşzamanlılık test edilmedi.
-- Gerçek yazıcı, yazarkasa ve banka POS entegrasyonları internet sunucusundan değil, restoran içindeki yerel ağdan çalışır; bu uygulama bulutta bu cihazlara doğrudan erişemez.
+- İnternet sunucusu restorandaki cihazlara doğrudan erişemez. Fiş yazıcıları için **yazıcı köprüsü** kullanılır (aşağıda). Yazarkasa ve banka POS entegrasyonu yoktur.
+
+## Yazıcı köprüsü (restorandaki Windows bilgisayar)
+Köprü, baskı işlerini sunucudan HTTPS ile çeker ve yazıcıya yollar. Python veya ek program gerekmez; modemde port açılmaz. Yazıcının bağlı olduğu veya aynı ağda bulunduğu Windows bilgisayarda:
+
+1. POSHANE > Yazıcılar > **Köprüyü indir (Windows)**; inen dosyaya çift tıklayın (Windows uyarırsa "Ek bilgi" > "Yine de çalıştır").
+2. Aynı sayfada **Anahtar oluştur**; anahtarı kopyalayıp köprü penceresine yapıştırın.
+3. Yazıcıyı düzenleyip **Yazıcı köprüsü ile bas** kutusunu işaretleyin. Windows yazıcıda adres, Windows'taki yazıcı adıyla birebir aynı olmalıdır; ağ yazıcısında IP adresi yazılır.
+4. **Test baskısı** alın.
+
+- Köprü penceresi açık kalmalıdır. Bilgisayarda oturum açılınca kendiliğinden başlar; bilgisayar uyku moduna girerse basmaz.
+- Köprü 30 dakikadan uzun kapalı kalırsa bekleyen fişler basılmaz, "Başarısız" olur; kuyruktan "Tekrar dene" ile basılabilir.
+- Her şube için bir anahtar ve tek köprü bilgisayarı vardır. Yeni anahtar oluşturmak eskisini iptal eder.
+- Anahtar bilgisayarda Windows kullanıcısına bağlı şifreli saklanır (`%LOCALAPPDATA%\POSHANE`). Kaybolan veya çalınan bilgisayar için yeni anahtar oluşturun.

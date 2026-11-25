@@ -78,6 +78,8 @@ CREATE DATABASE jetpos OWNER jetpos ENCODING 'UTF8';
 ## 6. Yazıcılar
 Yazıcılar ekranı. Bağlantı: **Ağ (TCP 9100, ESC/POS)**, **Windows yazıcı** (USB/sürücü; `pywin32`), **Dosya** (sanal/test).
 58/80 mm, CP857 Türkçe, kategori/istasyon yönlendirme, yedek yazıcı, tekrar deneme, test baskısı, bağlantı testi.
+Sunucu internetteyse (veya yazıcıya erişemiyorsa) **yazıcı köprüsü** kullanılır; `pywin32` gerekmez
+([YAYINLAMA.md](YAYINLAMA.md#yazıcı-köprüsü-restorandaki-windows-bilgisayar)).
 Epson TM, Xprinter, Bixolon, Star, HPRT, SNBC modellerinin her biri sahada **ayrıca test edilmelidir** (NFR-11).
 
 ## 7. Lisans

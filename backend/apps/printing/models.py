@@ -15,6 +15,7 @@ class Printer(models.Model):
     model_name = models.CharField(max_length=80, blank=True, help_text="Ör. Epson TM-T20 — uyumluluk ayrıca test edilmeli")
     connection = models.CharField(max_length=10, choices=CONNECTIONS, default="network")
     address = models.CharField(max_length=200, blank=True, help_text="IP adresi veya Windows yazıcı adı")
+    via_agent = models.BooleanField(default=False, help_text="Restoran bilgisayarındaki yazıcı köprüsü basar")
     port = models.PositiveIntegerField(default=9100)
     width_mm = models.PositiveSmallIntegerField(choices=[(58, "58 mm"), (80, "80 mm")], default=80)
     codepage = models.CharField(max_length=10, default="cp857")
@@ -55,7 +56,19 @@ class PrintJob(models.Model):
     last_error = models.TextField(blank=True)
     ref = models.CharField(max_length=60, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    queued_at = models.DateTimeField(null=True, blank=True, help_text="Elle tekrar denemede yenilenir")
+    started_at = models.DateTimeField(null=True, blank=True, help_text="Son baskı denemesinin başlangıcı")
     printed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class PrintAgent(models.Model):
+    """Şubedeki yazıcı köprüsü. Anahtar yalnızca özet (SHA-256) olarak saklanır."""
+
+    business = models.ForeignKey(Business, on_delete=models.CASCADE)
+    branch = models.OneToOneField(Branch, on_delete=models.CASCADE, related_name="print_agent")
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)

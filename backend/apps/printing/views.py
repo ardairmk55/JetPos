@@ -1,3 +1,8 @@
+from datetime import timedelta
+from pathlib import Path
+
+from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -5,10 +10,10 @@ from rest_framework.response import Response
 from apps.catalog.models import Category, Station
 from apps.catalog.serializers import BizScopedPKField
 from apps.core import audit, roles
-from apps.core.tenancy import TenantViewSet, limit_list
+from apps.core.tenancy import TenantViewSet, current_branch, limit_list
 
-from . import escpos, services
-from .models import Printer, PrintJob
+from . import agent_api, escpos, services
+from .models import PrintAgent, Printer, PrintJob
 
 
 class PrinterSerializer(serializers.ModelSerializer):
@@ -40,6 +45,12 @@ class PrinterSerializer(serializers.ModelSerializer):
         b = data.get("backup")
         if b is not None and self.instance and b.pk == self.instance.pk:
             raise serializers.ValidationError("Yazıcı kendi yedeği olamaz")
+        via_agent = data.get("via_agent", getattr(self.instance, "via_agent", False))
+        if via_agent and data.get("connection", getattr(self.instance, "connection", "network")) == "file":
+            raise serializers.ValidationError("Yazıcı köprüsü yalnızca ağ veya Windows yazıcı ile kullanılır")
+        backup = data.get("backup", getattr(self.instance, "backup", None))
+        if backup is not None and backup.via_agent != via_agent:
+            raise serializers.ValidationError("Yedek yazıcı da aynı şekilde (köprülü/köprüsüz) basılmalı")
         try:
             "ÇĞİÖŞÜçğıöşü".encode(data.get("codepage", getattr(self.instance, "codepage", "cp857")))
         except (LookupError, UnicodeEncodeError):
@@ -65,8 +76,37 @@ class PrinterViewSet(TenantViewSet):
     serializer_class = PrinterSerializer
     perm_read = (roles.PRINTERS_MANAGE, roles.PAYMENT_TAKE)
     perm_write = roles.PRINTERS_MANAGE
-    perm_actions = {"test": roles.PRINTERS_MANAGE}
+    perm_actions = {"test": roles.PRINTERS_MANAGE, "agent_token": roles.PRINTERS_MANAGE,
+                    "agent_status": (roles.PRINTERS_MANAGE, roles.PAYMENT_TAKE),
+                    "agent_script": roles.PRINTERS_MANAGE}
     ordering = ("name",)
+
+    @action(detail=False, methods=["post"], url_path="agent-token")
+    def agent_token(self, request):
+        if getattr(request, "support_grant", None):
+            return Response({"detail": "Köprü anahtarını yalnızca işletme oluşturabilir"}, status=403)
+        branch = current_branch(request)
+        token = agent_api.issue_token(branch.business, branch)
+        audit.log("printer.agent_token", request=request, entity="PrintAgent", entity_id=branch.pk)
+        return Response({"token": token})
+
+    @action(detail=False, url_path="agent-status")
+    def agent_status(self, request):
+        agent = PrintAgent.objects.filter(branch=current_branch(request)).first()
+        seen = agent.last_seen_at if agent else None
+        return Response({"configured": agent is not None,
+                         "online": bool(seen and timezone.now() - seen < timedelta(seconds=30)),
+                         "last_seen_at": seen})
+
+    @action(detail=False, url_path="agent-script")
+    def agent_script(self, request):
+        # Windows .cmd dosyası: BOM'suz, CRLF satır sonlu. Anahtar dosyaya yazılmaz.
+        text = (Path(__file__).parent / "agent" / "poshane-yazici-koprusu.cmd").read_text(encoding="utf-8")
+        text = text.replace("__SERVER_URL__", request.build_absolute_uri("/").rstrip("/"))
+        resp = HttpResponse("\r\n".join(text.splitlines()).encode("utf-8") + b"\r\n",
+                            content_type="application/octet-stream")
+        resp["Content-Disposition"] = 'attachment; filename="POSHANE-Yazici-Koprusu.cmd"'
+        return resp
 
     def get_queryset(self):
         from django.db.models import Count, Q
@@ -103,9 +143,7 @@ class PrintJobViewSet(TenantViewSet):
     def retry(self, request, pk=None):
         job = self.get_object()
         if job.status == "failed":
-            job.status = "queued"
-            job.attempts = 0
-            job.save(update_fields=["status", "attempts"])
+            services.requeue(job)
         services.process_job(job)
         job.refresh_from_db()
         return Response(PrintJobSerializer(job).data)

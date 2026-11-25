@@ -58,7 +58,7 @@ DECISION_TREES = [
         "net": {"q": "Yazıcı ağ (Ethernet/Wi-Fi) yazıcısı mı?", "yes": "ip", "no": "usb"},
         "ip": {"q": "Ayarlardaki IP adresi yazıcının self-test çıktısındaki IP ile aynı mı?", "yes": "queue", "no": "fixip"},
         "fixip": {"end": "Yazıcı ayarındaki IP adresini self-test çıktısındaki değerle güncelleyin ve test baskısı alın."},
-        "usb": {"end": "Windows yazıcı adının ayardakiyle birebir aynı olduğunu ve sunucuda 'pywin32' kurulu olduğunu doğrulayın."},
+        "usb": {"end": "Windows yazıcı adının ayardakiyle birebir aynı olduğunu doğrulayın. Sunucu internetteyse Yazıcılar sayfasındaki yazıcı köprüsü restorandaki bilgisayarda açık olmalıdır."},
         "queue": {"q": "Yazdırma kuyruğunda 'Başarısız' iş var mı?", "yes": "retry", "no": "support"},
         "retry": {"end": "Kuyruktan 'Tekrar dene'ye basın. Yedek yazıcı tanımlıysa iş otomatik oraya yönlenir."},
         "support": {"end": "Sorun sürüyorsa Destek > Yeni talep ile 'Yazıcı' kategorisinde talep açın."}}},

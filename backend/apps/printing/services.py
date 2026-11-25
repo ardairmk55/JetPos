@@ -1,6 +1,7 @@
 """Yazdırma kuyruğu: yönlendirme, tekrar deneme, yedek yazıcı ve hata takibi (§7.3)."""
 import logging
 import threading
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import close_old_connections, transaction
@@ -15,6 +16,8 @@ from .models import Printer, PrintJob
 
 log = logging.getLogger(__name__)
 MAX_ATTEMPTS = 3
+AGENT_JOB_TTL = timedelta(minutes=30)
+AGENT_RETRY_DELAY = timedelta(seconds=15)
 SYNC_PRINT = {"enabled": True}  # testlerde kapatılabilir
 
 
@@ -153,46 +156,109 @@ def enqueue_test(printer):
     return _enqueue(printer, kind="test", title="Test baskısı", content=content)
 
 
-def process_job(job):
-    with transaction.atomic():
-        job = PrintJob.objects.select_for_update().get(pk=job.pk)
-        if job.status in ("done", "printing"):
-            return job
-        job.status = "printing"
-        job.attempts += 1
-        job.save(update_fields=["status", "attempts"])
-    target = job.printer
-    if job.attempts > MAX_ATTEMPTS and job.printer.backup_id:
-        target = job.printer.backup
-    data = escpos.render(job.content, columns=target.columns, codepage=target.codepage,
+def _start(job):
+    job.status = "printing"
+    job.attempts += 1
+    job.started_at = timezone.now()
+    job.save(update_fields=["status", "attempts", "started_at"])
+
+
+def _target(job):
+    backup = job.printer.backup if job.attempts > MAX_ATTEMPTS and job.printer.backup_id else None
+    # Köprü işi sunucuya, sunucu işi köprüye aktarılamaz.
+    return backup if backup and backup.via_agent == job.printer.via_agent else job.printer
+
+
+def _render(job, target):
+    return escpos.render(job.content, columns=target.columns, codepage=target.codepage,
                          codepage_id=target.escpos_codepage_id, cut=target.cut)
-    try:
-        escpos.send(target, data, settings.JETPOS["PRINT_SPOOL_DIR"], job_id=job.id)
-    except escpos.PrinterError as e:
-        job.status = "queued" if job.attempts < MAX_ATTEMPTS + (1 if job.printer.backup_id else 0) else "failed"
-        job.last_error = str(e)
-        job.save(update_fields=["status", "last_error"])
-        Printer.objects.filter(pk=target.pk).update(last_error=str(e))
-        if job.status == "failed":
-            notify(branch=job.branch, event="printer_error", title=f"Yazdırılamadı: {job.title}",
-                   body=f"{job.printer.name}: {e}", priority="high",
-                   roles=[roles.CASHIER, roles.BRANCH_MANAGER, roles.OWNER], data={"job": job.id}, sound=True)
-        return job
+
+
+def _fail(job, target, error, *, final=False):
+    allowed = MAX_ATTEMPTS + (1 if job.printer.backup_id else 0)
+    job.status = "failed" if final or job.attempts >= allowed else "queued"
+    job.last_error = error
+    job.save(update_fields=["status", "last_error"])
+    Printer.objects.filter(pk=target.pk).update(last_error=error)
+    if job.status == "failed":
+        notify(branch=job.branch, event="printer_error", title=f"Yazdırılamadı: {job.title}",
+               body=f"{job.printer.name}: {error}", priority="high",
+               roles=[roles.CASHIER, roles.BRANCH_MANAGER, roles.OWNER], data={"job": job.id}, sound=True)
+
+
+def _succeed(job, target):
     job.status = "done"
     job.printed_on = target
     job.printed_at = timezone.now()
     job.last_error = ""
     job.save(update_fields=["status", "printed_on", "printed_at", "last_error"])
     Printer.objects.filter(pk=target.pk).update(last_ok_at=job.printed_at, last_error="")
+
+
+def process_job(job):
+    """Sunucunun kendisinin bastığı işler. Köprü işleri kuyrukta bekler (bkz. claim_for_agent)."""
+    with transaction.atomic():
+        job = PrintJob.objects.select_for_update().get(pk=job.pk)
+        if job.status in ("done", "printing") or job.printer.via_agent:
+            return job
+        _start(job)
+    target = _target(job)
+    try:
+        escpos.send(target, _render(job, target), settings.JETPOS["PRINT_SPOOL_DIR"], job_id=job.id)
+    except escpos.PrinterError as e:
+        _fail(job, target, str(e))
+        return job
+    _succeed(job, target)
     return job
+
+
+def claim_for_agent(branch):
+    """Köprüye sıradaki işi verir: (iş, hedef yazıcı, ESC/POS baytları) veya None."""
+    now = timezone.now()
+    waiting = PrintJob.objects.filter(branch=branch, status="queued", printer__via_agent=True)
+    # Köprü uzun süre kapalı kaldıysa saatler önceki mutfak fişleri sonradan basılmaz.
+    expired = now - AGENT_JOB_TTL
+    for job in waiting.filter(Q(queued_at__lt=expired) | Q(queued_at__isnull=True, created_at__lt=expired)):
+        _fail(job, job.printer, "Yazıcı köprüsü kapalıydı; işin süresi doldu. Gerekirse 'Tekrar dene'ye basın.",
+              final=True)
+    with transaction.atomic():
+        job = (waiting.filter(Q(started_at__isnull=True) | Q(started_at__lt=now - AGENT_RETRY_DELAY))
+               .select_for_update().order_by("created_at", "id").first())
+        if job is None:
+            return None
+        _start(job)
+    target = _target(job)
+    return job, target, _render(job, target)
+
+
+def report_from_agent(job, ok, error=""):
+    with transaction.atomic():
+        job = PrintJob.objects.select_for_update().get(pk=job.pk)
+        # Geç gelen sonuç: zamanlayıcı işi yeniden kuyruğa almış olabilir; başarı yine kaydedilir.
+        if job.status == "done" or job.attempts == 0 or (not ok and job.status != "printing"):
+            return job
+        if ok:
+            _succeed(job, _target(job))
+        else:
+            _fail(job, _target(job), error[:500] or "Yazıcı köprüsü hata bildirdi")
+    return job
+
+
+def requeue(job):
+    job.status = "queued"
+    job.attempts = 0
+    job.queued_at = timezone.now()
+    job.started_at = None
+    job.save(update_fields=["status", "attempts", "queued_at", "started_at"])
 
 
 def retry_pending(limit=100):
     n = 0
-    for job in PrintJob.objects.filter(status="queued").order_by("created_at")[:limit]:
+    for job in PrintJob.objects.filter(status="queued", printer__via_agent=False).order_by("created_at")[:limit]:
         process_job(job)
         n += 1
-    # 'printing' durumunda takılı kalanları (çöken thread) yeniden kuyruğa al
+    # 'printing' durumunda takılı kalanları (çöken thread/köprü) yeniden kuyruğa al
     stale = timezone.now() - timezone.timedelta(minutes=2)
-    PrintJob.objects.filter(status="printing", created_at__lt=stale).update(status="queued")
+    PrintJob.objects.filter(Q(started_at__lt=stale) | Q(started_at__isnull=True, created_at__lt=stale),
+                            status="printing").update(status="queued")
     return n

@@ -38,7 +38,7 @@ Durum işaretleri: ✅ çalışır ve test edildi · 🟡 kısmi / sınırlı ·
 | İndirim/iptal/iade, belediye personeli akışı, ters kayıt (§6.2) | ✅ | Belediye onayının genel politika ile rol uyumu 📝 |
 | Vergi snapshot, kanal/şube/grup/zamanlı fiyat, fiyat geçmişi, kampanya (yüzde, sabit, X al Y, paket, gün/saat, limit, öncelik) (§6.4) | ✅ | Kampanya motoru: satır başına en yüksek öncelikli tek kampanya |
 | KDS: FIFO, gecikme, öncelik, istasyon/merkezi görünüm, hazır, teslim alındı (§7.1, §7.2) | ✅ | Çok istasyonda "tek buton": her istasyon kendi kısmını, yönetici tüm partiyi hazırlar; parti tüm istasyonlar bitince hazır (📝 doğrulanmalı) |
-| Yazıcı: ESC/POS, CP857, 58/80 mm, yönlendirme, kuyruk, retry, yedek yazıcı, test baskısı (§7.3) | ✅ / ⛔ | Model bazlı uyumluluk sahada test edilmeli (NFR-11); USB için pywin32 |
+| Yazıcı: ESC/POS, CP857, 58/80 mm, yönlendirme, kuyruk, retry, yedek yazıcı, test baskısı (§7.3) | ✅ / ⛔ | Model bazlı uyumluluk sahada test edilmeli (NFR-11); yerel sunucuda USB için pywin32. Bulut sunucu için yazıcı köprüsü (`apps/printing/agent/`, `tests/test_print_agent.py`; Windows'ta sahte TCP yazıcıya gerçek baskı testi dahil, 103/103 geçti — 2026-11-25). Köprüyle gerçek yazıcı, otomatik başlatma kısayolu ve Windows yazıcıya başarılı baskı test edilmedi |
 | Stok/depo: reçete, birim dönüşümü, satın alma, transfer, sayım, fire, düşük stok, düşüm zamanı, politika (§8) | ✅ | |
 | CRM + KVKK (erişim kaydı, dışa aktarım, anonimleştirme) (§9.1, NFR-09) | ✅ | Sadakat/puan ilk kapsam dışı (şartname) |
 | Kurye (§9.2) | ✅ | Canlı GPS 📝 kararlaştırılmadı |

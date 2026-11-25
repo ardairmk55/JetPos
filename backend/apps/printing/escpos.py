@@ -63,7 +63,8 @@ def send(printer, data: bytes, spool_dir: Path, job_id=None):
         try:
             import win32print  # pywin32 — Windows sunucuda kurulmalı
         except ImportError:
-            raise PrinterError("Windows yazıcı sürücüsü için pywin32 kurulu değil (pip install pywin32)")
+            raise PrinterError("Bu sunucu Windows yazıcıya doğrudan basamaz. Yazıcı ayarında 'Yazıcı köprüsü ile bas' "
+                               "seçeneğini işaretleyin ve restorandaki bilgisayarda köprüyü açın.")
         try:
             h = win32print.OpenPrinter(printer.address)
             try:

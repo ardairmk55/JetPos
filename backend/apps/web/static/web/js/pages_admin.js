@@ -100,25 +100,79 @@
   };
 
   // ================================================================== YAZICILAR
+  // Sunucu internetteyse restorandaki yazıcıya yalnızca yazıcı köprüsü ulaşabilir.
+  const remoteServer = !/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
+
+  const showAgentToken = (token) => {
+    const m = J.modal({ title: "Köprü anahtarı", body: `<p class="mb-2">Bu anahtar <b>yalnızca bir kez</b> gösterilir. Kopyalayıp köprü penceresine yapıştırın (pencerede sağ tık yapıştırır).</p><input class="input w-full" readonly aria-label="Köprü anahtarı" value="${esc(token)}">`,
+      actions: [{ label: "Kopyala", cls: "btn-primary", close: false, run: async () => { m.body.querySelector("input").select(); try { await navigator.clipboard.writeText(token); } catch { document.execCommand("copy"); } J.toast("Kopyalandı", "ok"); } }, { label: "Kapat" }] });
+  };
+
+  const agentCard = (el) => {
+    const card = h(`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3"><h2 class="h2" style="font-size:1.0625rem">Yazıcı köprüsü</h2><span data-state></span></div>
+      <p class="text-sm muted mt-1">Sunucu internetteyse restorandaki yazıcıya doğrudan ulaşamaz. Yazıcının bağlı olduğu (veya aynı ağdaki) Windows bilgisayarda köprü açık olmalıdır.</p>
+      <ol class="text-sm mt-2 list-decimal pl-5 space-y-1"><li>O bilgisayarda köprü dosyasını indirip çift tıklayın. Windows uyarırsa "Ek bilgi", sonra "Yine de çalıştır" deyin.</li><li>"Anahtar oluştur" ile anahtarı alıp köprü penceresine yapıştırın.</li><li>Yazıcı ayarında "Yazıcı köprüsü ile bas" işaretli olsun.</li></ol>
+      <div class="flex flex-wrap gap-2 mt-3" data-btns></div></div>`);
+    el.appendChild(card);
+    let configured = false;
+    const refresh = async () => {
+      const s = await J.get("printers/agent-status").catch(() => null);
+      if (!s) return;
+      configured = s.configured;
+      card.querySelector("[data-state]").innerHTML = s.online ? J.badge("Bağlı", "var(--ok)") : J.badge(s.last_seen_at ? `Kapalı · son görülme ${J.dt(s.last_seen_at)}` : "Henüz bağlanmadı", "var(--warn)");
+    };
+    if (J.can("printers.manage")) {
+      const dl = h(`<a class="btn btn-primary btn-sm" href="/api/printers/agent-script" download>Köprüyü indir (Windows)</a>`);
+      const key = h(`<button class="btn btn-ghost btn-sm" type="button">Anahtar oluştur</button>`);
+      key.onclick = async () => {
+        if (configured && !(await J.confirm("Yeni anahtar oluşturulursa eski anahtarı kullanan köprü durur. Devam edilsin mi?"))) return;
+        const r = await J.post("printers/agent-token").catch(J.err);
+        if (r) { showAgentToken(r.token); refresh(); }
+      };
+      card.querySelector("[data-btns]").append(dl, key);
+    }
+    refresh();
+    const timer = setInterval(() => (card.isConnected ? refresh() : clearInterval(timer)), 10000);
+  };
+
+  const testPrint = async (r, reload) => {
+    let j = await J.post(`printers/${r.id}/test`).catch(J.err);
+    if (!j) return;
+    const waiting = () => r.via_agent && (j.status === "printing" || (j.status === "queued" && !j.last_error));
+    if (waiting()) {
+      J.toast("Test köprüye gönderildi, sonuç bekleniyor…", "ok");
+      for (let i = 0; i < 12 && waiting(); i++) {
+        await new Promise((done) => setTimeout(done, 1500));
+        j = (await J.get(`print-jobs/${j.id}`).catch(() => null)) || j;
+      }
+    }
+    const title = j.status === "done" ? "başarılı" : waiting() ? "köprü yanıt vermedi" : "BAŞARISIZ";
+    const note = waiting() ? "Yazıcı köprüsü açık mı kontrol edin. Köprü 30 dakika içinde açılırsa bu fiş basılır." : j.last_error;
+    J.modal({ title: `Test — ${title}`, body: `<pre class="text-xs surface-2 p-3 rounded overflow-x-auto">${esc(j.preview)}</pre>${note ? `<p style="color:var(--bad)" class="mt-2">${esc(note)}</p>` : ""}` });
+    reload();
+  };
+
   P.printers = async (main) => {
     main.appendChild(J.pageHead("Yazıcılar", "ESC/POS · 58/80 mm · ağ (TCP 9100), Windows sürücü veya dosya. Her model ayrıca test edilmelidir."));
+    agentCard(main);
     const c = h(`<div></div>`);
     main.appendChild(c);
     J.tabs(c, [
       { key: "printers", label: "Yazıcılar", render: (el) => J.crud(el, {
         title: "Yazıcı", endpoint: "printers", perm: "printers.manage", size: "max-w-3xl",
-        columns: [{ key: "name", label: "Yazıcı" }, { key: "model_name", label: "Model" }, { key: "connection", label: "Bağlantı", fmt: (v, r) => `${v} ${r.address}${r.connection === "network" ? ":" + r.port : ""}` }, { key: "width_mm", label: "mm" }, { key: "target", label: "Hedef" }, { key: "queued", label: "Kuyruk", right: true }, { key: "failed", label: "Hata", right: true }, { key: "last_error", label: "Son hata", fmt: (v) => (v || "").slice(0, 60) }],
+        columns: [{ key: "name", label: "Yazıcı" }, { key: "model_name", label: "Model" }, { key: "connection", label: "Bağlantı", fmt: (v, r) => `${v} ${r.address}${r.connection === "network" ? ":" + r.port : ""}${r.via_agent ? " · köprü" : ""}` }, { key: "width_mm", label: "mm" }, { key: "target", label: "Hedef" }, { key: "queued", label: "Kuyruk", right: true }, { key: "failed", label: "Hata", right: true }, { key: "last_error", label: "Son hata", fmt: (v) => (v || "").slice(0, 60) }],
         fields: [{ name: "name", label: "Ad", required: true }, { name: "model_name", label: "Model (Epson TM, Xprinter, Bixolon, Star, HPRT, SNBC…)" },
           { name: "connection", label: "Bağlantı", type: "select", required: true, options: [["network", "Ethernet / Wi-Fi (TCP)"], ["windows", "Windows yazıcı (USB/sürücü)"], ["file", "Dosyaya yaz (sanal)"]] },
           { name: "address", label: "IP adresi / Windows yazıcı adı / klasör" }, { name: "port", label: "Port", type: "number", default: 9100 },
+          { name: "via_agent", label: "Yazıcı köprüsü ile bas (restorandaki Windows bilgisayar)", type: "checkbox", default: remoteServer, wide: true },
           { name: "width_mm", label: "Kâğıt", type: "select", required: true, options: [[80, "80 mm"], [58, "58 mm"]] }, { name: "target", label: "Hedef", type: "select", required: true, options: [["cashier", "Kasa"], ["kitchen", "Mutfak"], ["bar", "İçecek"], ["dessert", "Tatlı"], ["other", "Diğer"]] },
           { name: "stations", label: "İstasyon yönlendirme", type: "multiselect", options: opt("stations") }, { name: "categories", label: "Kategori yönlendirme", type: "multiselect", options: opt("categories") },
           { name: "print_receipts", label: "Hesap/ödeme fişlerini bas", type: "checkbox" }, { name: "backup", label: "Yedek yazıcı", type: "select", options: opt("printers") },
           { name: "codepage", label: "Kod sayfası", default: "cp857" }, { name: "escpos_codepage_id", label: "ESC t n değeri", type: "number", default: 13 },
           { name: "header", label: "Özel fiş başlığı", type: "textarea" }, { name: "footer", label: "Özel fiş altı", type: "textarea" }, { name: "cut", label: "Kâğıt kes", type: "checkbox", default: true }, { name: "is_active", label: "Aktif", type: "checkbox", default: true }],
         deleteLabel: "Pasifleştir",
-        actions: [{ label: "Test baskısı", run: async (r, reload) => { const j = await J.post(`printers/${r.id}/test`).catch(J.err); if (!j) return; J.modal({ title: `Test — ${j.status === "done" ? "başarılı" : "BAŞARISIZ"}`, body: `<pre class="text-xs surface-2 p-3 rounded overflow-x-auto">${esc(j.preview)}</pre>${j.last_error ? `<p style="color:var(--bad)" class="mt-2">${esc(j.last_error)}</p>` : ""}` }); reload(); } },
-          { label: "Bağlantı testi", show: (r) => r.connection === "network", run: async (r) => { const x = await J.post("printer-probe", { address: r.address, port: r.port }).catch(J.err); if (x) J.toast(x.ok ? "Yazıcıya ulaşıldı" : `Ulaşılamadı: ${x.error}`, x.ok ? "ok" : "bad"); } }],
+        actions: [{ label: "Test baskısı", run: testPrint },
+          { label: "Bağlantı testi", show: (r) => r.connection === "network" && !r.via_agent,run: async (r) => { const x = await J.post("printer-probe", { address: r.address, port: r.port }).catch(J.err); if (x) J.toast(x.ok ? "Yazıcıya ulaşıldı" : `Ulaşılamadı: ${x.error}`, x.ok ? "ok" : "bad"); } }],
       }) },
       { key: "jobs", label: "Yazdırma kuyruğu", render: (el) => J.crud(el, { title: "İş", endpoint: "print-jobs", columns: [{ key: "created_at", label: "Zaman", fmt: J.dt }, { key: "title", label: "İş" }, { key: "printer_name", label: "Yazıcı" }, { key: "printed_on_name", label: "Basılan" }, { key: "status", label: "Durum", html: (r) => J.badge(r.status, r.status === "done" ? "var(--ok)" : r.status === "failed" ? "var(--bad)" : "var(--warn)") }, { key: "attempts", label: "Deneme", right: true }, { key: "last_error", label: "Hata", fmt: (v) => (v || "").slice(0, 80) }],
         onRow: (r) => J.modal({ title: r.title, body: `<pre class="text-xs surface-2 p-3 rounded overflow-x-auto">${esc(r.preview)}</pre>` }),
